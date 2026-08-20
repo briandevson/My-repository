@@ -13,6 +13,15 @@ external assets to download.
 
 ![Mining in Coldiron Quarry](docs/quarry.png)
 
+## Two ways to play
+
+**Multiplayer, on a server** — the real thing: several players in one world.
+
+**Single player, in one file** — `npm run build:standalone` bundles the entire
+game, server logic included, into `dist/aetheria.html`. Open that file in any
+browser, including on a phone; the world ticks in the page and your character
+saves to browser storage. No install, no network.
+
 ## Running it
 
 ```bash
@@ -26,7 +35,9 @@ A name that has never been used creates a new character.
 ```bash
 npm run dev         # esbuild in watch mode alongside the server
 npm test            # unit and integration tests (no browser needed)
-node tools/playtest.js   # drives the real client in a real browser end to end
+npm run test:browser     # drives the real client in a real browser end to end
+npm run test:mobile      # the standalone build, on an emulated iPhone with touch
+npm run build:standalone # dist/aetheria.html - the whole game in one file
 ```
 
 ## What is in the world
@@ -54,6 +65,11 @@ ranged, prayer, magic, cooking, woodcutting, fletching, fishing, firemaking,
 crafting, smithing, mining, herblore, agility and thieving. The production
 chains connect — mine ore, smelt it into bars, hammer the bars into equipment
 you can actually wear.
+
+**Controls.** Mouse: left-click acts, right-click opens the full menu, right-drag
+orbits, wheel zooms. Touch: tap acts, long press opens the menu, drag orbits,
+pinch zooms. On phones the side panel becomes a bottom sheet that collapses to
+its tab strip.
 
 **The rest.** 30-slot inventory and 96-slot bank, eleven equipment slots,
 shops, prayers that drain points while active, spells that consume runes,

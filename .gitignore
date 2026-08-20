@@ -1,5 +1,6 @@
 node_modules/
 client/dist/
+dist/
 server/data/
 tools/shots/
 *.log

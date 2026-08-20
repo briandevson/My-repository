@@ -141,8 +141,7 @@ export class GameWorld {
     this.sendStats(player);
     this.sendInventory(player);
     this.sendEquipment(player);
-    player.message(`Welcome to Aetheria, ${player.name}.`);
-    player.message('Click the ground to walk. Right-click things for their options.');
+    player.message(`Welcome to Aetheria, ${player.display}.`);
   }
 
   removePlayer(player) {

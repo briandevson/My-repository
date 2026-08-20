@@ -288,3 +288,52 @@ test('a monster another player is fighting cannot be stolen', () => {
   world.handleNpcAction(player, { id: goblin.id, option: 'attack' });
   assert.equal(player.target, null);
 });
+
+test('lighting logs creates a fire that can be cooked on, then burns to ashes', () => {
+  const { world, player } = makeWorld();
+  player.stats.firemaking.xp = xpForLevel(50);
+  player.stats.cooking.xp = xpForLevel(50);
+  // Logs do not stack, so leave room in the pack for the fish.
+  addItem(player.inventory, 'raw_shrimp', 1);
+  addItem(player.inventory, 'logs', 10);
+  const tinderbox = player.inventory.findIndex((slot) => slot?.id === 'tinderbox');
+
+  // Lighting is a roll; at level 50 it is a near certainty within a few tries.
+  for (let i = 0; i < 20 && world.temps.size === 0; i++) {
+    const logs = player.inventory.findIndex((slot) => slot?.id === 'logs');
+    world.handleMessage(player, { op: 'inv', act: 'use', slot: tinderbox, targetKind: 'item', to: logs });
+  }
+  assert.equal(world.temps.size, 1, 'a fire is burning');
+  const fire = [...world.temps.values()][0];
+  assert.ok(player.stats.firemaking.xp > 0);
+  assert.ok(world.isBlockedTile(fire.x, fire.y), 'you cannot walk through a fire');
+
+  // The fire is reachable and offers a cooking menu.
+  player.x = fire.x + 1;
+  player.y = fire.y;
+  world.handleObjectAction(player, { index: fire.index, option: 'use' });
+  assert.ok(player.menu, 'the fire opens a cooking menu');
+  world.handleMenu(player, { choice: 0 });
+  assert.equal(countOf(player.inventory, 'raw_shrimp'), 0, 'the raw fish was used');
+
+  // It burns out and leaves ashes behind.
+  for (let i = 0; i < 200 && world.temps.size > 0; i++) world.tick();
+  assert.equal(world.temps.size, 0, 'the fire burns out');
+  assert.ok(world.groundItems.some((item) => item.id === 'ashes'), 'ashes are left behind');
+});
+
+test('a fire lit under the player moves them clear of it', () => {
+  const { world, player } = makeWorld();
+  player.stats.firemaking.xp = xpForLevel(50);
+  addItem(player.inventory, 'logs', 10);
+  const tinderbox = player.inventory.findIndex((slot) => slot?.id === 'tinderbox');
+  const from = { x: player.x, y: player.y };
+
+  for (let i = 0; i < 20 && world.temps.size === 0; i++) {
+    const logs = player.inventory.findIndex((slot) => slot?.id === 'logs');
+    world.handleMessage(player, { op: 'inv', act: 'use', slot: tinderbox, targetKind: 'item', to: logs });
+  }
+  const fire = [...world.temps.values()][0];
+  assert.deepEqual({ x: fire.x, y: fire.y }, from, 'the fire is where the player stood');
+  assert.notDeepEqual({ x: player.x, y: player.y }, from, 'the player stepped aside');
+});

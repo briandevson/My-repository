@@ -20,7 +20,9 @@ npm start                 # build the client bundle, then serve on :8080
 npm run dev               # esbuild --watch alongside the server
 npm run build             # bundle client/src/main.js -> client/dist/bundle.js
 npm test                  # node --test test/*.test.js  (fast, no browser)
-node tools/playtest.js    # boots server + Chromium, plays the game, writes tools/shots/
+npm run test:browser      # boots server + Chromium, plays the game, writes tools/shots/
+npm run test:mobile       # standalone build on an emulated iPhone, touch input
+npm run build:standalone  # dist/aetheria.html - single-player, whole game in one file
 ```
 
 `PORT`, `HOST` and `AETHERIA_DATA` (character save directory) are the only
@@ -32,6 +34,22 @@ not regenerated automatically by `npm run serve`.
 
 If Playwright cannot find its browser, `tools/playtest.js` already falls back to
 `/opt/pw-browsers/chromium-*/chrome-linux/chrome`; `CHROMIUM_PATH` overrides it.
+
+## Two builds from one client
+
+`tools/build.js` produces the served bundle, which talks to the dedicated server
+over a WebSocket. `tools/bundle-standalone.js` produces `dist/aetheria.html`: a
+single self-contained file where the same `GameWorld` runs inside the page.
+
+The switch is `__AETHERIA_OFFLINE__`, replaced by esbuild's `define`, read once
+in `client/src/transport.js`. `LocalNet` presents the same surface as `Net` —
+`on`, `send`, `connect` — so `main.js` cannot tell which it has. Nothing in the
+`server/` module graph may import `node:*` outside `index.js` and
+`persistence.js`, or the standalone build breaks.
+
+The standalone page is designed to be embedded somewhere that owns `<head>`, so
+it injects its own viewport meta at runtime. Without it mobile browsers lay the
+page out at 980px and the HUD renders desktop-sized on a phone.
 
 ## Layout
 
@@ -63,6 +81,8 @@ client/
   src/models.js  every mesh, built from Three.js primitives
   src/ui.js      all DOM: panels, chat, context menus, modals, minimap
   src/net.js     WebSocket wrapper
+  src/localnet.js  in-page GameWorld + localStorage save (single-player build)
+  src/transport.js chooses between them at build time
 
 tools/     build.js (esbuild), playtest.js (browser end-to-end test)
 test/      node:test unit + integration tests
@@ -161,4 +181,5 @@ up in the unit tests.
 - `findPath` scans its open list linearly; a heap would matter for big maps.
 - The world is a single flat level — no floors, ladders or instances.
 - Fletching produces strung bows directly instead of unstrung + bow string.
+- The standalone build is single-player by definition; there is no peer sync.
 - There is no rate limiting on client messages.

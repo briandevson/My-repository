@@ -8,16 +8,8 @@ const DATA_DIR = process.env.AETHERIA_DATA ?? join(here, 'data', 'players');
 
 mkdirSync(DATA_DIR, { recursive: true });
 
-/** Usernames are lowercase, 2-12 characters, letters/digits/underscore. */
-export function normaliseName(name) {
-  const clean = String(name ?? '').trim().toLowerCase().replace(/\s+/g, '_');
-  if (!/^[a-z0-9_]{2,12}$/.test(clean)) return null;
-  return clean;
-}
-
-export function displayName(name) {
-  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
+export { normaliseName, displayName } from '../shared/names.js';
+import { normaliseName } from '../shared/names.js';
 
 function fileFor(name) {
   // The name is validated by normaliseName before it ever reaches here, so it

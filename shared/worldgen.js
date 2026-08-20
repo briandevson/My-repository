@@ -76,7 +76,22 @@ export function regionAt(x, y) {
  *   spawns: Array<{npc:string,x:number,y:number,radius:number}>,
  * }}
  */
+/**
+ * Generated worlds are cached per seed. The result is treated as immutable by
+ * every consumer (the server keeps mutable object state separately), so the
+ * client and an in-process server can safely share one instance.
+ */
+const worldCache = new Map();
+
 export function buildWorld(seed = WORLD_SEED) {
+  const cached = worldCache.get(seed);
+  if (cached) return cached;
+  const world = generateWorld(seed);
+  worldCache.set(seed, world);
+  return world;
+}
+
+function generateWorld(seed) {
   const size = WORLD_SIZE;
   const rng = mulberry32(seed);
   const base = makeNoise(rng, size, 24);

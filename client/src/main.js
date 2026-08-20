@@ -4,10 +4,10 @@ import { OBJECTS } from '../../shared/objects.js';
 import { VIEW_RADIUS } from '../../shared/constants.js';
 import { GameScene } from './scene.js';
 import { UI } from './ui.js';
-import { Net } from './net.js';
+import { createTransport, OFFLINE } from './transport.js';
 
 const canvas = document.getElementById('view');
-const net = new Net();
+const net = createTransport();
 
 let scene = null;
 let world = null;
@@ -28,6 +28,9 @@ const ui = new UI({
   onLogin(name, password) {
     ui.loginError('');
     net.send('login', { name, password });
+  },
+  onReset() {
+    net.reset?.();
   },
   onChat(text) {
     net.send('chat', { text });
@@ -87,6 +90,8 @@ const ui = new UI({
 
 net.on('error', (msg) => ui.loginError(msg.reason));
 
+const COARSE_POINTER = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+
 net.on('welcome', (msg) => {
   selfId = msg.id;
   world = buildWorld(msg.seed);
@@ -95,6 +100,11 @@ net.on('welcome', (msg) => {
   ui.enterWorld();
   window.addEventListener('resize', () => scene.resize());
   scene.resize();
+  ui.addMessage(
+    COARSE_POINTER
+      ? 'Tap the ground to walk. Press and hold anything for its options.'
+      : 'Click the ground to walk. Right-click things for their options.',
+  );
 });
 
 net.on('snapshot', (msg) => {
@@ -130,6 +140,7 @@ net.on('dialogue', (msg) => ui.showDialogue(msg.name, msg.lines));
 net.on('die', () => ui.addMessage('You have died. You keep your three most valuable items.', 'levelup'));
 net.on('close', () => ui.showLogin('Connection lost. Log in again.'));
 
+if (OFFLINE) ui.setOfflineMode();
 net.connect();
 
 // ---------------------------------------------------------------------------
@@ -241,47 +252,132 @@ function defaultAction(hit) {
   }
 }
 
-let dragging = false;
-let dragMoved = false;
-let lastPointer = { x: 0, y: 0 };
+/**
+ * One gesture model for mouse and touch.
+ *
+ *   mouse: left click acts, right drag orbits, right click opens the menu,
+ *          wheel zooms.
+ *   touch: tap acts, drag orbits, long press opens the menu, pinch zooms.
+ */
+const LONG_PRESS_MS = 420;
+const DRAG_SLOP = 10;
+
+const pointers = new Map();
+let gesture = 'idle';
+let longPress = null;
+let pinchStart = 0;
+let pinchZoom = 0;
+
+function pointerList() {
+  return [...pointers.values()];
+}
+
+function pinchDistance() {
+  const [a, b] = pointerList();
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function cancelLongPress() {
+  clearTimeout(longPress);
+  longPress = null;
+}
+
+function openMenuAt(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const hit = scene.pick(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  const options = optionsFor(hit);
+  if (options.length > 0) ui.showContextMenu(clientX, clientY, titleFor(hit), options);
+}
 
 canvas.addEventListener('pointerdown', (event) => {
   if (!scene) return;
-  if (event.button === 2) {
-    dragging = true;
-    dragMoved = false;
-    lastPointer = { x: event.clientX, y: event.clientY };
+  ui.hideContextMenu();
+  try {
     canvas.setPointerCapture(event.pointerId);
+  } catch {
+    // Capture is an optimisation, not a requirement - never lose the gesture over it.
   }
+  pointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY,
+    startX: event.clientX,
+    startY: event.clientY,
+  });
+
+  if (pointers.size === 2) {
+    cancelLongPress();
+    gesture = 'pinch';
+    pinchStart = pinchDistance();
+    pinchZoom = scene.cameraDistance;
+    return;
+  }
+  if (pointers.size > 2) return;
+
+  if (event.pointerType === 'mouse') {
+    gesture = event.button === 2 ? 'orbit' : 'press';
+    return;
+  }
+  gesture = 'press';
+  longPress = setTimeout(() => {
+    gesture = 'menu';
+    openMenuAt(event.clientX, event.clientY);
+  }, LONG_PRESS_MS);
 });
 
 canvas.addEventListener('pointermove', (event) => {
-  if (!scene || !dragging) return;
-  const dx = event.clientX - lastPointer.x;
-  const dy = event.clientY - lastPointer.y;
-  if (Math.abs(dx) + Math.abs(dy) > 3) dragMoved = true;
-  scene.cameraYaw -= dx * 0.006;
-  scene.cameraPitch = Math.max(0.25, Math.min(1.35, scene.cameraPitch + dy * 0.004));
-  lastPointer = { x: event.clientX, y: event.clientY };
-});
-
-canvas.addEventListener('pointerup', (event) => {
   if (!scene) return;
-  if (event.button === 2) {
-    dragging = false;
-    if (!dragMoved) {
-      const ndc = toNdc(event);
-      const hit = scene.pick(ndc.x, ndc.y);
-      const options = optionsFor(hit);
-      if (options.length > 0) ui.showContextMenu(event.clientX, event.clientY, titleFor(hit), options);
-    }
+  const pointer = pointers.get(event.pointerId);
+  if (!pointer) return;
+  const dx = event.clientX - pointer.x;
+  const dy = event.clientY - pointer.y;
+  pointer.x = event.clientX;
+  pointer.y = event.clientY;
+
+  if (gesture === 'pinch' && pointers.size >= 2) {
+    const ratio = pinchStart / Math.max(1, pinchDistance());
+    scene.cameraDistance = Math.max(5, Math.min(34, pinchZoom * ratio));
     return;
   }
-  if (event.button === 0) {
-    ui.hideContextMenu();
-    const ndc = toNdc(event);
-    defaultAction(scene.pick(ndc.x, ndc.y));
+  if (gesture === 'menu') return;
+
+  const travelled = Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY);
+  if (gesture === 'press' && travelled > DRAG_SLOP) {
+    cancelLongPress();
+    gesture = 'orbit';
   }
+  if (gesture !== 'orbit') return;
+  scene.cameraYaw -= dx * 0.007;
+  scene.cameraPitch = Math.max(0.25, Math.min(1.4, scene.cameraPitch + dy * 0.005));
+});
+
+function endPointer(event) {
+  if (!scene) return;
+  const pointer = pointers.get(event.pointerId);
+  pointers.delete(event.pointerId);
+  cancelLongPress();
+  if (!pointer) return;
+
+  const travelled = Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY);
+  if (gesture === 'press' && travelled <= DRAG_SLOP) {
+    const rect = canvas.getBoundingClientRect();
+    const ndcX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    if (event.pointerType === 'mouse' && event.button === 2) openMenuAt(event.clientX, event.clientY);
+    else defaultAction(scene.pick(ndcX, ndcY));
+  } else if (gesture === 'orbit' && event.pointerType === 'mouse' && event.button === 2 && travelled <= DRAG_SLOP) {
+    openMenuAt(event.clientX, event.clientY);
+  }
+  if (pointers.size === 0) gesture = 'idle';
+}
+
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', (event) => {
+  pointers.delete(event.pointerId);
+  cancelLongPress();
+  if (pointers.size === 0) gesture = 'idle';
 });
 
 function titleFor(hit) {

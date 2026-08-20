@@ -49,7 +49,7 @@ export class UI {
     const go = () => {
       const name = $('login-name').value.trim();
       const pass = $('login-pass').value;
-      if (!name || !pass) {
+      if (!this.offlineMode && (!name || !pass)) {
         this.loginError('Enter a name and a password.');
         return;
       }
@@ -64,14 +64,46 @@ export class UI {
   }
 
   bindTabs() {
+    const compact = window.matchMedia('(max-width: 760px)');
+    const panel = $('panel');
+    // On a phone the panel starts collapsed to a tab strip so the world gets
+    // the screen; picking a tab opens it, picking the open one closes it again.
+    const applyCompact = () => panel.classList.toggle('collapsed', compact.matches);
+    applyCompact();
+    compact.addEventListener('change', applyCompact);
+
     for (const tab of document.querySelectorAll('.tab')) {
       tab.addEventListener('click', () => {
+        const wasActive = tab.classList.contains('active');
+        if (compact.matches && wasActive) {
+          panel.classList.toggle('collapsed');
+          return;
+        }
+        panel.classList.remove('collapsed');
         for (const other of document.querySelectorAll('.tab')) other.classList.toggle('active', other === tab);
         for (const page of document.querySelectorAll('.page')) {
           page.classList.toggle('active', page.id === `page-${tab.dataset.tab}`);
         }
       });
     }
+  }
+
+  /**
+   * Single-player build: there are no accounts, so the card asks for a name
+   * only, and the character lives in this browser.
+   */
+  setOfflineMode() {
+    this.offlineMode = true;
+    document.body.classList.add('offline');
+    $('login-pass').value = 'local';
+    $('login-go').textContent = 'Enter the world';
+    $('login-name').placeholder = 'name your character';
+    const hint = document.querySelector('.hint');
+    if (hint) hint.textContent = 'Single player. Your character is saved in this browser.';
+    if (window.matchMedia?.('(pointer: coarse)').matches) {
+      $('chatinput').placeholder = 'Tap to chat';
+    }
+    this.renderQuestPage();
   }
 
   bindChat() {
@@ -316,11 +348,22 @@ export class UI {
         4. Chop trees west of town and light a fire with your tinderbox.<br>
         5. Bank your loot at the bank booths.<br><br>
         <b>Controls</b><br>
-        Left-click: walk / default action.<br>
-        Right-click: all options.<br>
-        Right-drag or arrow keys: rotate camera.<br>
-        Mouse wheel: zoom.
-      </div>`;
+        ${this.offlineMode
+          ? 'Tap: walk or act.<br>Long press: all options.<br>Drag: rotate camera.<br>Pinch: zoom.'
+          : 'Left-click: walk / default action.<br>Right-click: all options.<br>Right-drag or arrow keys: rotate.<br>Mouse wheel: zoom.'}
+      </div>
+      ${this.offlineMode ? '<div class="option-row" id="reset-character"><span>Start a new character</span><span class="meta">erases this one</span></div>' : ''}`;
+    const reset = $('reset-character');
+    if (reset) {
+      reset.addEventListener('click', () => {
+        if (reset.dataset.armed) {
+          this.handlers.onReset();
+          return;
+        }
+        reset.dataset.armed = '1';
+        reset.querySelector('span').textContent = 'Tap again to confirm';
+      });
+    }
   }
 
   /** Reflect per-tick server state: orbs, active style, active prayers. */

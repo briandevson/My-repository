@@ -266,7 +266,7 @@ export class Player {
 
   toSave() {
     return {
-      name: this.display,
+      name: this.name,
       x: this.x,
       y: this.y,
       stats: this.stats,
