@@ -4,10 +4,10 @@ import { OBJECTS } from '../../shared/objects.js';
 import { VIEW_RADIUS } from '../../shared/constants.js';
 import { GameScene } from './scene.js';
 import { UI } from './ui.js';
-import { createTransport, OFFLINE } from './transport.js';
+import { Net } from './net.js';
 
 const canvas = document.getElementById('view');
-const net = createTransport();
+const net = new Net();
 
 let scene = null;
 let world = null;
@@ -19,7 +19,7 @@ let pendingUse = null;
 let lastTradeRequest = null;
 
 /** Exposed for the automated play test in tools/playtest.js. */
-const debug = { net, get scene() { return scene; }, get world() { return world; }, latest, inventory: [] };
+const debug = { net, get scene() { return scene; }, get world() { return world; }, latest, inventory: [], stats: null };
 window.__aetheria = debug;
 
 // ---------------------------------------------------------------------------
@@ -27,12 +27,9 @@ window.__aetheria = debug;
 // ---------------------------------------------------------------------------
 
 const ui = new UI({
-  onLogin(name, password) {
+  onLogin(name, password, create) {
     ui.loginError('');
-    net.send('login', { name, password });
-  },
-  onReset() {
-    net.reset?.();
+    net.send('login', { name, password, create });
   },
   onChat(text) {
     net.send('chat', { text });
@@ -141,7 +138,10 @@ net.on('tradeopen', () => ui.addMessage('Trade opened.'));
 net.on('tradeupdate', (msg) => ui.showTrade(msg));
 net.on('tradeclose', () => ui.closeTrade());
 net.on('levelup', (msg) => ui.addMessage(`Level up: ${msg.skill} is now ${msg.level}!`, 'levelup'));
-net.on('stats', (msg) => ui.renderStats(msg.stats, msg.combat, msg.quests));
+net.on('stats', (msg) => {
+  debug.stats = msg.stats;
+  ui.renderStats(msg.stats, msg.combat, msg.quests);
+});
 net.on('inventory', (msg) => {
   debug.inventory = msg.items;
   ui.renderInventory(msg.items);
@@ -161,7 +161,6 @@ net.on('dialogue', (msg) => ui.showDialogue(msg.name, msg.lines));
 net.on('die', () => ui.addMessage('You have died. You keep your three most valuable items.', 'levelup'));
 net.on('close', () => ui.showLogin('Connection lost. Log in again.'));
 
-if (OFFLINE) ui.setOfflineMode();
 net.connect();
 
 // ---------------------------------------------------------------------------

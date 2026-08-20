@@ -17,6 +17,9 @@ const MINIMAP_COLOURS = {
 
 const $ = (id) => document.getElementById(id);
 
+/** Touch devices get different wording for every control hint. */
+const TOUCH = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+
 /**
  * All DOM handling lives here. The UI never talks to the socket directly; it
  * calls back into main.js through `handlers`.
@@ -51,19 +54,20 @@ export class UI {
   // --- Wiring --------------------------------------------------------------
 
   bindLogin() {
-    const go = () => {
+    const go = (create) => {
       const name = $('login-name').value.trim();
       const pass = $('login-pass').value;
-      if (!this.offlineMode && (!name || !pass)) {
+      if (!name || !pass) {
         this.loginError('Enter a name and a password.');
         return;
       }
-      this.handlers.onLogin(name, pass);
+      this.handlers.onLogin(name, pass, create);
     };
-    $('login-go').addEventListener('click', go);
+    $('login-go').addEventListener('click', () => go(false));
+    $('login-create').addEventListener('click', () => go(true));
     for (const id of ['login-name', 'login-pass']) {
       $(id).addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') go();
+        if (event.key === 'Enter') go(false);
       });
     }
   }
@@ -91,27 +95,6 @@ export class UI {
         }
       });
     }
-  }
-
-  /**
-   * Single-player build: there are no accounts, so the card asks for a name
-   * only, and the character lives in this browser.
-   */
-  setOfflineMode() {
-    this.offlineMode = true;
-    document.body.classList.add('offline');
-    // Single player: there is nobody to befriend, message, follow or trade with.
-    document.querySelector('.tab[data-tab="social"]')?.remove();
-    $('page-social')?.remove();
-    $('login-pass').value = 'local';
-    $('login-go').textContent = 'Enter the world';
-    $('login-name').placeholder = 'name your character';
-    const hint = document.querySelector('.hint');
-    if (hint) hint.textContent = 'Single player. Your character is saved in this browser.';
-    if (window.matchMedia?.('(pointer: coarse)').matches) {
-      $('chatinput').placeholder = 'Tap to chat';
-    }
-    this.renderQuestPage();
   }
 
   bindSocial() {
@@ -538,22 +521,14 @@ export class UI {
         4. Chop trees west of town and light a fire with your tinderbox.<br>
         5. Bank your loot at the bank booths.<br><br>
         <b>Controls</b><br>
-        ${this.offlineMode
+        ${TOUCH
           ? 'Tap: walk or act.<br>Long press: all options.<br>Drag: rotate camera.<br>Pinch: zoom.'
           : 'Left-click: walk / default action.<br>Right-click: all options.<br>Right-drag or arrow keys: rotate.<br>Mouse wheel: zoom.'}
-      </div>
-      ${this.offlineMode ? '<div class="option-row" id="reset-character"><span>Start a new character</span><span class="meta">erases this one</span></div>' : ''}`;
-    const reset = $('reset-character');
-    if (reset) {
-      reset.addEventListener('click', () => {
-        if (reset.dataset.armed) {
-          this.handlers.onReset();
-          return;
-        }
-        reset.dataset.armed = '1';
-        reset.querySelector('span').textContent = 'Tap again to confirm';
-      });
-    }
+        <br><br><b>Playing with others</b><br>
+        Everyone on this server shares one world. Press and hold (or right-click)
+        another player to trade, follow, message or add them as a friend.
+        Friends show as green dots on the minimap.
+      </div>`;
   }
 
   /** Reflect per-tick server state: orbs, active style, active prayers. */

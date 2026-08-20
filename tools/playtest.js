@@ -68,7 +68,7 @@ try {
   await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
   await page.fill('#login-name', 'playtest');
   await page.fill('#login-pass', 'hunter2');
-  await page.click('#login-go');
+  await page.click('#login-create');
 
   await page.waitForSelector('#hud:not([hidden])', { timeout: 10000 });
   check(true, 'logged in and the HUD appeared');

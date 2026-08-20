@@ -65,11 +65,12 @@ wss.on('connection', (socket) => {
 
     if (!player) {
       if (msg.op !== 'login') return;
-      const result = authenticate(msg.name, msg.password);
+      const result = authenticate(msg.name, msg.password, !!msg.create);
       if (!result.ok) {
         socket.send(JSON.stringify({ op: 'error', reason: result.reason }));
         return;
       }
+      // One session per character, so a name is never in the world twice.
       for (const online of world.players.values()) {
         if (online.name === result.name) {
           socket.send(JSON.stringify({ op: 'error', reason: 'That character is already logged in.' }));

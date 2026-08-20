@@ -9,7 +9,7 @@ const DATA_DIR = process.env.AETHERIA_DATA ?? join(here, 'data', 'players');
 mkdirSync(DATA_DIR, { recursive: true });
 
 export { normaliseName, displayName } from '../shared/names.js';
-import { normaliseName } from '../shared/names.js';
+import { normaliseName, displayName } from '../shared/names.js';
 
 function fileFor(name) {
   // The name is validated by normaliseName before it ever reaches here, so it
@@ -44,25 +44,45 @@ export function saveAccount(name, account) {
 }
 
 /**
- * Log in, creating the account on first use.
- * @returns {{ok:true, account:object, fresh:boolean} | {ok:false, reason:string}}
+ * Log in, or register a new character.
+ *
+ * Names are unique and case-insensitive: they are normalised to lowercase
+ * before anything looks at them, so `Gwyn`, `gwyn` and `GWYN` are one
+ * character and the second person to want that name is turned away.
+ *
+ * @param {boolean} create true to register, false to log in to an existing one
+ * @returns {{ok:true, account:object, fresh:boolean, name:string} | {ok:false, reason:string}}
  */
-export function authenticate(name, password) {
+export function authenticate(name, password, create = false) {
   const clean = normaliseName(name);
   if (!clean) return { ok: false, reason: 'Names must be 2-12 letters, digits or underscores.' };
   if (String(password ?? '').length < 4) return { ok: false, reason: 'Passwords must be at least 4 characters.' };
 
   const existing = loadAccount(clean);
-  if (!existing) {
+
+  if (create) {
+    if (existing) {
+      return { ok: false, reason: `The name ${displayName(clean)} is already taken. Please choose another.` };
+    }
     const { salt, hash } = hashPassword(password);
     const account = { name: clean, salt, hash, created: Date.now(), save: null };
     saveAccount(clean, account);
     return { ok: true, account, fresh: true, name: clean };
   }
+
+  if (!existing) {
+    return { ok: false, reason: `No character called ${displayName(clean)}. Choose "Create character" to make one.` };
+  }
   if (!verifyPassword(password, existing.salt, existing.hash)) {
     return { ok: false, reason: 'Incorrect password.' };
   }
   return { ok: true, account: existing, fresh: false, name: clean };
+}
+
+/** Is this name free to register? */
+export function nameAvailable(name) {
+  const clean = normaliseName(name);
+  return !!clean && !loadAccount(clean);
 }
 
 export function persistPlayer(player) {

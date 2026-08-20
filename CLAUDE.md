@@ -4,8 +4,10 @@ Guidance for AI assistants working in this repository.
 
 ## What this is
 
-Aetheria is a tick-based 3D MMORPG: an authoritative Node.js game server over
-WebSockets plus a Three.js browser client. It is a single npm package with no
+Aetheria is a tick-based multiplayer 3D MMORPG: an authoritative Node.js game
+server over WebSockets plus a Three.js browser client. It is online only -
+there is no offline or single-player mode, and every client is a real player in
+one shared world. It is a single npm package with no
 framework, no build step for the server, and no external art or map assets —
 the world and every model are generated from code at runtime.
 
@@ -21,9 +23,8 @@ npm run dev               # esbuild --watch alongside the server
 npm run build             # bundle client/src/main.js -> client/dist/bundle.js
 npm test                  # node --test test/*.test.js  (fast, no browser)
 npm run test:browser      # boots server + Chromium, plays the game, writes tools/shots/
-npm run test:mobile       # standalone build on an emulated iPhone, touch input
+npm run test:mobile       # an emulated iPhone joining the server, touch input
 npm run test:social       # two browsers, two players: friends, PMs, follow, trade
-npm run build:standalone  # dist/aetheria.html - single-player, whole game in one file
 ```
 
 `PORT`, `HOST` and `AETHERIA_DATA` (character save directory) are the only
@@ -35,22 +36,6 @@ not regenerated automatically by `npm run serve`.
 
 If Playwright cannot find its browser, `tools/playtest.js` already falls back to
 `/opt/pw-browsers/chromium-*/chrome-linux/chrome`; `CHROMIUM_PATH` overrides it.
-
-## Two builds from one client
-
-`tools/build.js` produces the served bundle, which talks to the dedicated server
-over a WebSocket. `tools/bundle-standalone.js` produces `dist/aetheria.html`: a
-single self-contained file where the same `GameWorld` runs inside the page.
-
-The switch is `__AETHERIA_OFFLINE__`, replaced by esbuild's `define`, read once
-in `client/src/transport.js`. `LocalNet` presents the same surface as `Net` —
-`on`, `send`, `connect` — so `main.js` cannot tell which it has. Nothing in the
-`server/` module graph may import `node:*` outside `index.js` and
-`persistence.js`, or the standalone build breaks.
-
-The standalone page is designed to be embedded somewhere that owns `<head>`, so
-it injects its own viewport meta at runtime. Without it mobile browsers lay the
-page out at 980px and the HUD renders desktop-sized on a phone.
 
 ## Layout
 
@@ -83,8 +68,6 @@ client/
   src/models.js  every mesh, built from Three.js primitives
   src/ui.js      all DOM: panels, chat, context menus, modals, minimap
   src/net.js     WebSocket wrapper
-  src/localnet.js  in-page GameWorld + localStorage save (single-player build)
-  src/transport.js chooses between them at build time
 
 tools/     build.js (esbuild), playtest.js (browser end-to-end test)
 test/      node:test unit + integration tests
@@ -132,6 +115,21 @@ them interchangeably. Preserve that when adding entity types.
 Multi-step choices (what to smelt, what to fletch) go through
 `openMenu(player, title, options, handler)`, which keeps the handler closure on
 the server; the client only ever sends the chosen index.
+
+## Accounts
+
+Character names are unique and case-insensitive. `normaliseName` in
+`shared/names.js` lowercases and underscores a name before anything looks at
+it, and that canonical form is both the save key and the identity used for
+friends, private messages and trade. `authenticate(name, password, create)`
+takes an explicit `create` flag: registering a name that exists is refused,
+and logging in to one that does not exist is too - never merge the two, or a
+typo silently creates a second character. `server/index.js` additionally allows
+only one live session per character.
+
+Passwords are scrypt-hashed with a per-account salt and compared with
+`timingSafeEqual`. Save files are named by a hash of the character name, so a
+name can never escape into a file path.
 
 ## Trading
 
@@ -201,7 +199,5 @@ up in the unit tests.
 - `findPath` scans its open list linearly; a heap would matter for big maps.
 - The world is a single flat level — no floors, ladders or instances.
 - Fletching produces strung bows directly instead of unstrung + bow string.
-- The standalone build is single-player by definition; there is no peer sync,
-  so it has no friends list, messaging or trading (the Social tab is removed).
 - Trading pins both players in place rather than letting them walk.
 - There is no rate limiting on client messages.

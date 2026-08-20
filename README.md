@@ -1,7 +1,7 @@
 # Aetheria
 
-A tick-based 3D MMORPG built in the spirit of the original browser RPGs of the
-early 2000s: click-to-move on a tile grid, a 600 ms game tick, eighteen skills
+A tick-based multiplayer 3D MMORPG built in the spirit of the original browser
+RPGs of the early 2000s: click-to-move on a tile grid, a 600 ms game tick, eighteen skills
 that level on the classic experience curve, and an authoritative server that
 owns every roll of the dice.
 
@@ -13,33 +13,36 @@ external assets to download.
 
 ![Mining in Coldiron Quarry](docs/quarry.png)
 
-## Two ways to play
-
-**Multiplayer, on a server** — the real thing: several players in one world.
-
-**Single player, in one file** — `npm run build:standalone` bundles the entire
-game, server logic included, into `dist/aetheria.html`. Open that file in any
-browser, including on a phone; the world ticks in the page and your character
-saves to browser storage. No install, no network. Being single player, it has
-no friends list, messaging or trading — those need the server build.
-
 ## Running it
 
 ```bash
 npm install
-npm start           # builds the client bundle and serves on http://localhost:8080
+npm start           # builds the client and serves on http://localhost:8080
 ```
 
-Then open <http://localhost:8080>, pick any name and password, and you are in.
-A name that has never been used creates a new character.
+Open <http://localhost:8080>, pick a name and a password, and choose **Create
+character**. Names are unique across the server and ignore capitals, so `Gwyn`
+and `gwyn` are the same character and only one person can have it.
+
+## Playing with friends
+
+Everyone who connects to the same server shares one world, so friends just need
+to reach your machine:
+
+- **Same house or office** — they open `http://<your-computer's-ip>:8080`.
+  `npm start` already listens on every interface; `HOST` and `PORT` override it.
+- **Over the internet** — put it behind a tunnel (`cloudflared`, `ngrok`) or run
+  it on a small VPS. It is a plain HTTP + WebSocket server on one port.
+
+Phones are first-class clients: the same world, the same social features, driven
+by taps instead of clicks.
 
 ```bash
 npm run dev         # esbuild in watch mode alongside the server
 npm test            # unit and integration tests (no browser needed)
 npm run test:browser     # drives the real client in a real browser end to end
-npm run test:mobile      # the standalone build, on an emulated iPhone with touch
+npm run test:mobile      # an emulated iPhone joining the server with touch input
 npm run test:social      # two browsers, two players: friends, chat, follow, trade
-npm run build:standalone # dist/aetheria.html - the whole game in one file
 ```
 
 ## What is in the world

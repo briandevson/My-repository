@@ -1,30 +1,33 @@
 /**
- * Play test for the standalone single-player build on a phone-sized device
- * with touch input. Screenshots land in tools/shots/.
+ * Play test on a phone-sized device with touch input, against the real server.
+ * Phones are first-class clients: the same shared world, the same social
+ * features, driven by taps instead of clicks. Screenshots land in tools/shots/.
  */
 import { chromium, devices } from 'playwright';
-import { createServer } from 'node:http';
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SHOTS = join(root, 'tools', 'shots');
-const FILE = process.argv[2] ?? join(root, 'dist', 'aetheria.html');
-const PORT = 8111;
+const PORT = Number(process.env.MOBILETEST_PORT ?? 8097);
 mkdirSync(SHOTS, { recursive: true });
+rmSync(join(SHOTS, 'mobile-players'), { recursive: true, force: true });
 
 const failures = [];
 const check = (ok, label) => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`);
   if (!ok) failures.push(label);
 };
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const page_html = readFileSync(FILE);
-const server = createServer((_req, res) => {
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-  res.end(page_html);
-}).listen(PORT);
+const server = spawn(process.execPath, [join(root, 'server', 'index.js')], {
+  env: { ...process.env, PORT: String(PORT), AETHERIA_DATA: join(SHOTS, 'mobile-players') },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+server.stderr.on('data', (data) => process.stderr.write(`[server] ${data}`));
+await wait(1200);
 
 function findChromium() {
   if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
@@ -39,66 +42,88 @@ const browser = await chromium.launch({
   executablePath: findChromium(),
   args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
 });
-const context = await browser.newContext({ ...devices['iPhone 13'] });
-const page = await context.newPage();
 
 const errors = [];
 const FONT_HOSTS = /fonts\.(googleapis|gstatic)\.com/;
-page.on('console', (message) => {
-  // The web font is the one external request; some sandboxes block it, and the
-  // page is designed to fall back cleanly, so it is not a failure.
-  const text = message.text();
-  if (message.type() !== 'error') return;
-  if (FONT_HOSTS.test(text) || text.includes('Failed to load resource')) return;
-  errors.push(text);
-});
-page.on('requestfailed', (request) => {
-  if (!FONT_HOSTS.test(request.url())) errors.push(`request failed: ${request.url()}`);
-});
-page.on('pageerror', (error) => errors.push(String(error)));
-
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function open(device) {
+  const context = await browser.newContext({ ...devices[device] });
+  const page = await context.newPage();
+  page.on('pageerror', (error) => errors.push(String(error)));
+  page.on('console', (message) => {
+    const text = message.text();
+    if (message.type() !== 'error') return;
+    if (FONT_HOSTS.test(text) || text.includes('Failed to load resource')) return;
+    errors.push(text);
+  });
+  await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
+  return page;
+}
 
 try {
-  await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
-  check((await page.locator('#login-name').count()) === 1, 'the start screen renders');
-  check(await page.locator('#login-pass').isHidden().catch(() => false) === false, 'name field is present');
+  const phone = await open('iPhone 13');
 
-  await page.fill('#login-name', 'wren');
-  await page.tap('#login-go');
-  await page.waitForSelector('#hud:not([hidden])', { timeout: 15000 });
+  // --- Registration and unique names -------------------------------------
+  await phone.fill('#login-name', 'wren');
+  await phone.fill('#login-pass', 'hunter2');
+  await phone.tap('#login-go');
+  await wait(1200);
+  const loginError = await phone.textContent('#login-error');
+  check(loginError.includes('No character'), `logging in to a name that does not exist is refused (${loginError})`);
+
+  await phone.tap('#login-create');
+  await phone.waitForSelector('#hud:not([hidden])', { timeout: 15000 });
   await wait(3000);
-  check(true, 'the world booted with no server');
+  check(true, 'creating the character logs straight in');
 
-  const stats = await page.evaluate(() => ({
+  const stats = await phone.evaluate(() => ({
     entities: window.__aetheria.scene.entities.size,
     objects: window.__aetheria.scene.objectMeshes.size,
     triangles: window.__aetheria.scene.renderer.info.render.triangles,
-    name: window.__aetheria.latest.players.find((p) => p.id === 1)?.name,
   }));
   console.log('   scene:', JSON.stringify(stats));
   check(stats.triangles > 1000 && stats.entities >= 1, 'the world renders on the phone');
-  check(stats.name === 'Wren', `the character is named (${stats.name})`);
+  check((await phone.locator('#panel.collapsed').count()) === 1, 'the panel starts collapsed');
+  await phone.screenshot({ path: join(SHOTS, 'ios-01-world.png') });
 
-  // The panel starts collapsed so the world keeps the screen.
-  const collapsed = await page.locator('#panel.collapsed').count();
-  check(collapsed === 1, 'the panel starts collapsed on a phone');
-  await page.screenshot({ path: join(SHOTS, 'ios-01-world.png') });
+  // --- A second person cannot take the same name --------------------------
+  const rival = await open('iPhone 13');
+  await rival.fill('#login-name', 'WREN');
+  await rival.fill('#login-pass', 'different');
+  await rival.tap('#login-create');
+  await wait(1200);
+  const taken = await rival.textContent('#login-error');
+  check(/already taken/i.test(taken), `the name is taken, capitals and all (${taken})`);
 
-  await page.tap('.tab[data-tab="inventory"]');
+  // The rival makes their own character and joins the same world.
+  await rival.fill('#login-name', 'finch');
+  await rival.fill('#login-pass', 'hunter2');
+  await rival.tap('#login-create');
+  await rival.waitForSelector('#hud:not([hidden])', { timeout: 15000 });
+  await wait(2500);
+  const seen = await phone.evaluate(() => window.__aetheria.latest.players.map((p) => p.name));
+  check(seen.includes('Finch'), `wren sees finch in the shared world (${seen.join(', ')})`);
+
+  // --- Social features work from a phone ----------------------------------
+  await phone.tap('.tab[data-tab="social"]');
   await wait(400);
-  check((await page.locator('#panel.collapsed').count()) === 0, 'tapping a tab opens the sheet');
-  check((await page.locator('#inventory-grid .slot.filled').count()) >= 10, 'the starter kit is there');
-  await page.screenshot({ path: join(SHOTS, 'ios-02-panel.png') });
-  await page.tap('.tab[data-tab="inventory"]');
-  await wait(300);
-  check((await page.locator('#panel.collapsed').count()) === 1, 'tapping it again closes the sheet');
+  await phone.fill('#friend-name', 'finch');
+  await phone.tap('#friend-add');
+  await wait(900);
+  check((await phone.locator('#friends-list .friend-row.online').count()) === 1, 'wren added finch as a friend from the phone');
+  await phone.screenshot({ path: join(SHOTS, 'ios-02-social.png') });
 
-  // A tap on the world walks there.
-  const before = await page.evaluate(() => ({ ...window.__aetheria.latest.self }));
-  // Aim at a point that is both ground in the 3D scene and not under any HUD
-  // element: a tap on the sky or on the panel correctly does not walk.
-  const target = await page.evaluate(() => {
+  await phone.evaluate(() => window.__aetheria.net.send('pm', { to: 'finch', text: 'on my way' }));
+  await wait(900);
+  const finchChat = await rival.evaluate(() =>
+    [...document.querySelectorAll('#chatlog div')].map((line) => line.textContent));
+  check(finchChat.some((line) => line.includes('Wren tells you: on my way')), 'the private message arrived');
+
+  await phone.tap('.tab[data-tab="social"]');
+  await wait(300);
+
+  // --- Touch controls -----------------------------------------------------
+  const before = await phone.evaluate(() => ({ ...window.__aetheria.latest.self }));
+  const target = await phone.evaluate(() => {
     const w = window.innerWidth;
     const h = window.innerHeight;
     for (let fy = 0.35; fy <= 0.75; fy += 0.05) {
@@ -113,46 +138,44 @@ try {
     return null;
   });
   check(!!target, `found open ground to tap (${target})`);
-  await page.touchscreen.tap(target[0], target[1]);
+  await phone.touchscreen.tap(target[0], target[1]);
   await wait(3500);
-  const after = await page.evaluate(() => ({ ...window.__aetheria.latest.self }));
+  const after = await phone.evaluate(() => ({ ...window.__aetheria.latest.self }));
   check(after.x !== before.x || after.y !== before.y, `tap walks (${before.x},${before.y} -> ${after.x},${after.y})`);
 
-  // A drag orbits the camera rather than walking.
-  const yaw = await page.evaluate(() => window.__aetheria.scene.cameraYaw);
-  await page.touchscreen.tap(1, 1).catch(() => {});
-  await page.locator('#view').hover({ position: { x: 200, y: 320 } }).catch(() => {});
-  await page.evaluate(() => {
+  const yaw = await phone.evaluate(() => window.__aetheria.scene.cameraYaw);
+  await phone.evaluate(() => {
     const canvas = document.getElementById('view');
-    const send = (type, x, y, id = 1) =>
-      canvas.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+    const send = (type, x, y) =>
+      canvas.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true }));
     send('pointerdown', 200, 320);
     for (let x = 200; x <= 300; x += 20) send('pointermove', x, 320);
     send('pointerup', 300, 320);
   });
   await wait(200);
-  const yawAfter = await page.evaluate(() => window.__aetheria.scene.cameraYaw);
-  check(yawAfter !== yaw, 'dragging orbits the camera');
+  check((await phone.evaluate(() => window.__aetheria.scene.cameraYaw)) !== yaw, 'dragging orbits the camera');
 
-  // A long press opens the options menu.
-  await page.evaluate(() => {
-    const canvas = document.getElementById('view');
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 300, bubbles: true, isPrimary: true }));
+  await phone.evaluate(() => {
+    document.getElementById('view').dispatchEvent(new PointerEvent('pointerdown', {
+      pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 300, bubbles: true, isPrimary: true,
+    }));
   });
   await wait(700);
-  const menuOpen = await page.locator('#contextmenu:not([hidden]) .cm-item').count();
-  check(menuOpen > 0, `long press opens the options menu (${menuOpen} options)`);
-  await page.screenshot({ path: join(SHOTS, 'ios-03-menu.png') });
-  await page.evaluate(() => {
-    document.getElementById('view').dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 300, bubbles: true, isPrimary: true }));
+  const menuItems = await phone.locator('#contextmenu:not([hidden]) .cm-item').count();
+  check(menuItems > 0, `long press opens the options menu (${menuItems} options)`);
+  await phone.screenshot({ path: join(SHOTS, 'ios-03-menu.png') });
+  await phone.evaluate(() => {
+    document.getElementById('view').dispatchEvent(new PointerEvent('pointerup', {
+      pointerId: 7, pointerType: 'touch', clientX: 195, clientY: 300, bubbles: true, isPrimary: true,
+    }));
   });
 
-  // Mine some ore, so a full skill loop is proven on the phone build.
-  const mined = await page.evaluate(async () => {
-    const { net, world } = window.__aetheria;
+  // --- A full skill loop from the phone -----------------------------------
+  const mined = await phone.evaluate(async () => {
+    const { net, world, scene } = window.__aetheria;
     const self = () => window.__aetheria.latest.self;
     const rock = world.objects
-      .filter((object) => object.type === 'copper_rock')
+      .filter((object) => scene.objectTypeAt(object.index) === 'copper_rock')
       .sort((a, b) => Math.hypot(a.x - self().x, a.y - self().y) - Math.hypot(b.x - self().x, b.y - self().y))[0];
     net.send('action', { kind: 'object', index: rock.index, option: 'use' });
     for (let i = 0; i < 100; i++) {
@@ -161,29 +184,26 @@ try {
     }
     return false;
   });
-  check(mined, 'mining works in the standalone build');
+  check(mined, 'mining works from a phone');
 
-  // Progress survives a reload.
-  const xpBefore = await page.evaluate(() => {
-    window.__aetheria.net.save();
-    return window.__aetheria.net.player.stats.mining.xp;
-  });
-  await page.reload({ waitUntil: 'load' });
-  await page.fill('#login-name', 'wren');
-  await page.tap('#login-go');
-  await page.waitForSelector('#hud:not([hidden])', { timeout: 15000 });
-  await wait(1500);
-  const xpAfter = await page.evaluate(() => window.__aetheria.net.player.stats.mining.xp);
-  check(xpAfter === xpBefore && xpAfter > 0, `progress survives a reload (${xpBefore} -> ${xpAfter} mining xp)`);
+  // --- Progress persists across a reconnect -------------------------------
+  const xpBefore = await phone.evaluate(() => window.__aetheria.stats?.mining?.xp ?? 0);
+  await phone.reload({ waitUntil: 'load' });
+  await phone.fill('#login-name', 'wren');
+  await phone.fill('#login-pass', 'hunter2');
+  await phone.tap('#login-go');
+  await phone.waitForSelector('#hud:not([hidden])', { timeout: 15000 });
+  await wait(2500);
+  const xpAfter = await phone.evaluate(() => window.__aetheria.stats?.mining?.xp ?? 0);
+  check(xpAfter >= xpBefore && xpAfter > 0, `progress is on the server (${xpBefore} -> ${xpAfter} mining xp)`);
 
   check(errors.length === 0, `no console errors (${errors.slice(0, 3).join(' | ') || 'none'})`);
 } catch (error) {
   console.error('mobile test threw:', error);
   failures.push(String(error));
-  await page.screenshot({ path: join(SHOTS, 'ios-error.png') }).catch(() => {});
 } finally {
   await browser.close();
-  server.close();
+  server.kill('SIGTERM');
 }
 
 console.log(failures.length === 0 ? '\nAll mobile checks passed.' : `\n${failures.length} check(s) failed.`);

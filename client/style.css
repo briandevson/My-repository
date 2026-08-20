@@ -111,10 +111,15 @@ button {
   cursor: pointer;
 }
 
-.login-card button {
-  width: 100%;
-  padding: 11px;
+.login-buttons {
+  display: flex;
+  gap: 8px;
   margin-top: 6px;
+}
+
+.login-card button {
+  flex: 1;
+  padding: 11px 8px;
   background: linear-gradient(#7c5c2a, #5b421d);
   border: 1px solid var(--border-bright);
   border-radius: 6px;
@@ -125,6 +130,12 @@ button {
 
 .login-card button:hover {
   filter: brightness(1.15);
+}
+
+.login-card button.secondary {
+  background: linear-gradient(#3d4a5c, #2b3542);
+  border-color: #6b7f96;
+  color: #dbe6f2;
 }
 
 .error {

@@ -56,7 +56,7 @@ async function login(name) {
   await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
   await page.fill('#login-name', name);
   await page.fill('#login-pass', 'hunter2');
-  await page.click('#login-go');
+  await page.click('#login-create');
   await page.waitForSelector('#hud:not([hidden])', { timeout: 15000 });
   await wait(2000);
   return page;
@@ -70,6 +70,25 @@ try {
   const alice = await login('alice');
   const bob = await login('bob');
   check(true, 'two players logged into one world');
+
+  // Names are unique across the server, capitals and all.
+  const impostor = await browser.newContext({ viewport: { width: 900, height: 700 } });
+  const impostorPage = await impostor.newPage();
+  await impostorPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
+  await impostorPage.fill('#login-name', 'Alice');
+  await impostorPage.fill('#login-pass', 'notalice');
+  await impostorPage.click('#login-create');
+  await wait(1000);
+  const taken = await impostorPage.textContent('#login-error');
+  check(/already taken/i.test(taken), `a second Alice is refused (${taken})`);
+
+  // And the real Alice cannot be logged in twice at once.
+  await impostorPage.fill('#login-pass', 'hunter2');
+  await impostorPage.click('#login-go');
+  await wait(1000);
+  const doubled = await impostorPage.textContent('#login-error');
+  check(/already logged in/i.test(doubled), `one session per character (${doubled})`);
+  await impostor.close();
 
   // Each should see the other in the world.
   const aliceSees = await alice.evaluate(() => window.__aetheria.latest.players.map((p) => p.name));

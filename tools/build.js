@@ -11,7 +11,6 @@ const options = {
   format: 'esm',
   target: ['es2022'],
   sourcemap: true,
-  define: { __AETHERIA_OFFLINE__: 'false' },
   minify: process.argv.includes('--minify'),
   logLevel: 'info',
 };
