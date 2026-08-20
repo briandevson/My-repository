@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Aetheria</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>%F0%9F%97%A1%EF%B8%8F</text></svg>" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="login" class="overlay">
+      <div class="login-card">
+        <h1>Aetheria</h1>
+        <p class="tagline">A tick-based world of skills, monsters and slow, stubborn progress.</p>
+        <label>Character name<input id="login-name" maxlength="12" autocomplete="username" placeholder="e.g. gwyn" /></label>
+        <label>Password<input id="login-pass" type="password" autocomplete="current-password" placeholder="4+ characters" /></label>
+        <button id="login-go">Enter the world</button>
+        <p id="login-error" class="error"></p>
+        <p class="hint">New names create a new character automatically.</p>
+      </div>
+    </div>
+
+    <div id="hud" hidden>
+      <div id="top-left">
+        <div id="orbs">
+          <div class="orb" id="orb-hits"><span class="orb-label">HP</span><span class="orb-value">10</span></div>
+          <div class="orb" id="orb-prayer"><span class="orb-label">PR</span><span class="orb-value">1</span></div>
+          <div class="orb" id="orb-energy" title="Click to toggle running"><span class="orb-label">RUN</span><span class="orb-value">100</span></div>
+        </div>
+      </div>
+
+      <div id="top-right">
+        <div id="minimap-wrap">
+          <canvas id="minimap" width="176" height="176"></canvas>
+          <div id="region">Ashford</div>
+        </div>
+      </div>
+
+      <div id="panel">
+        <div id="tabs">
+          <button class="tab active" data-tab="inventory" title="Inventory">Inv</button>
+          <button class="tab" data-tab="equipment" title="Worn equipment">Worn</button>
+          <button class="tab" data-tab="skills" title="Skills">Skills</button>
+          <button class="tab" data-tab="combat" title="Combat options">Combat</button>
+          <button class="tab" data-tab="prayer" title="Prayer">Prayer</button>
+          <button class="tab" data-tab="magic" title="Spellbook">Magic</button>
+          <button class="tab" data-tab="quests" title="Quests and help">Info</button>
+        </div>
+        <div id="panel-body">
+          <div class="page active" id="page-inventory"><div id="inventory-grid" class="grid"></div></div>
+          <div class="page" id="page-equipment">
+            <div id="equipment-slots"></div>
+            <div id="equipment-bonuses" class="bonuses"></div>
+          </div>
+          <div class="page" id="page-skills"><div id="skills-list"></div><div id="total-level"></div></div>
+          <div class="page" id="page-combat"><div id="combat-styles"></div><div id="combat-info"></div></div>
+          <div class="page" id="page-prayer"><div id="prayer-list"></div></div>
+          <div class="page" id="page-magic"><div id="spell-list"></div></div>
+          <div class="page" id="page-quests"><div id="quest-list"></div></div>
+        </div>
+      </div>
+
+      <div id="chat">
+        <div id="chatlog"></div>
+        <input id="chatinput" maxlength="90" placeholder="Press Enter to chat" />
+      </div>
+    </div>
+
+    <div id="contextmenu" hidden></div>
+    <div id="modal" class="overlay" hidden><div id="modal-card"></div></div>
+    <div id="tooltip" hidden></div>
+
+    <script type="module" src="/dist/bundle.js"></script>
+  </body>
+</html>
