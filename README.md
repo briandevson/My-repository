@@ -9,7 +9,9 @@ Everything is original — the code, the world, the item and monster catalogues,
 and all of the art, which is generated from primitives at runtime. There are no
 external assets to download.
 
-![Ashford, the starting village](tools/shots/01-world.png)
+![Ashford, the starting village](docs/ashford.png)
+
+![Mining in Coldiron Quarry](docs/quarry.png)
 
 ## Running it
 
