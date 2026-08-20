@@ -256,3 +256,35 @@ test('drop tables always give the guaranteed entries', () => {
   assert.ok(drops.some((drop) => drop.id === 'bones'));
   assert.ok(drops.some((drop) => drop.id === 'cowhide'));
 });
+
+test('combat is one-on-one: a second monster will not join a fight', () => {
+  const { world, player } = makeWorld();
+  const [first, second] = world.npcs.filter((npc) => npc.type === 'goblin');
+  first.x = player.x + 1;
+  first.y = player.y;
+  second.x = player.x - 1;
+  second.y = player.y;
+  second.spawnX = second.x;
+  second.spawnY = second.y;
+
+  first.target = player;
+  world.seekTarget(second);
+  assert.equal(second.target, null, 'the second goblin stays out of it');
+
+  first.target = null;
+  world.seekTarget(second);
+  assert.equal(second.target, player, 'and joins once the first has disengaged');
+});
+
+test('a monster another player is fighting cannot be stolen', () => {
+  const { world, player } = makeWorld();
+  const other = new Player('rival', { readyState: 1, send() {} });
+  world.addPlayer(other);
+  const goblin = world.npcs.find((npc) => npc.type === 'goblin');
+  other.target = goblin;
+
+  player.x = goblin.x;
+  player.y = goblin.y - 1;
+  world.handleNpcAction(player, { id: goblin.id, option: 'attack' });
+  assert.equal(player.target, null);
+});

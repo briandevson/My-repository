@@ -587,10 +587,32 @@ export class GameWorld {
       if (chebyshev(npc, player) > npc.def.aggroRadius) continue;
       // Aggression stops once you clearly outclass the monster, as it did classically.
       if (player.combatLevel > (npc.def.level ?? 1) * 2 && !player.inCombatFor) continue;
+      // Single combat: one fight at a time, so a camp cannot dogpile a player.
+      if (this.isEngaged(player, npc)) continue;
       npc.target = player;
       player.message?.(`The ${npc.name.toLowerCase()} attacks you!`);
       return;
     }
+  }
+
+  /**
+   * Is this entity already locked in a fight with someone other than `except`?
+   * Combat here is one-on-one: nobody may join a fight already in progress.
+   */
+  isEngaged(entity, except = null) {
+    if (entity.kind === 'player') {
+      const target = entity.target;
+      if (target && target !== except && !target.dead) return true;
+    }
+    for (const npc of this.npcs) {
+      if (npc === except || npc.dead) continue;
+      if (npc.target === entity) return true;
+    }
+    for (const player of this.players.values()) {
+      if (player === except || player.dead) continue;
+      if (player.target === entity) return true;
+    }
+    return false;
   }
 
   // --- Snapshots -----------------------------------------------------------
@@ -890,7 +912,15 @@ export class GameWorld {
         player.message('You cannot attack them.');
         return;
       }
+      if (this.isEngaged(npc, player)) {
+        player.message('Someone else is fighting that.');
+        return;
+      }
       this.queue(player, 'npc', msg.id, combatRange(player), (target) => {
+        if (this.isEngaged(target, player)) {
+          player.message('Someone else is fighting that.');
+          return;
+        }
         player.target = target;
       });
       return;
