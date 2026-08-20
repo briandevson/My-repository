@@ -33,6 +33,14 @@ import {
   swapSlots,
 } from './container.js';
 import * as skills from './skills.js';
+import {
+  broadcastPresence,
+  endTradeFor,
+  handleFriend,
+  handlePrivateMessage,
+  handleTrade,
+  sendFriendList,
+} from './social.js';
 
 const GROUND_ITEM_LIFETIME = 200; // ticks before a drop disappears
 const OWNERSHIP_TICKS = 100; // ticks a drop stays private to its owner
@@ -141,12 +149,22 @@ export class GameWorld {
     this.sendStats(player);
     this.sendInventory(player);
     this.sendEquipment(player);
+    sendFriendList(this, player);
+    broadcastPresence(this, player, true);
     player.message(`Welcome to Aetheria, ${player.display}.`);
   }
 
   removePlayer(player) {
+    endTradeFor(player, 'The other player logged out.');
     this.players.delete(player.id);
+    broadcastPresence(this, player, false);
     for (const npc of this.npcs) if (npc.target?.id === player.id) npc.target = null;
+    for (const other of this.players.values()) {
+      if (other.following === player.id) {
+        other.following = null;
+        other.message('You stop following.');
+      }
+    }
   }
 
   // --- Main tick -----------------------------------------------------------
@@ -194,6 +212,7 @@ export class GameWorld {
     player.drainPrayer();
 
     this.movePlayer(player);
+    this.tickFollow(player);
     this.resolvePending(player);
     this.tickCombatFor(player);
     this.tickGatherFor(player);
@@ -219,6 +238,32 @@ export class GameWorld {
       player.y = next.y;
       player.path.shift();
       if (player.running) player.energy = Math.max(0, player.energy - RUN_DRAIN_PER_TICK);
+    }
+  }
+
+  /** Keep walking toward whoever we are following until they stop. */
+  tickFollow(player) {
+    if (player.following === null) return;
+    const target = this.players.get(player.following);
+    if (!target || target.dead) {
+      player.following = null;
+      player.message('You stop following.');
+      return;
+    }
+    if (chebyshev(player, target) > VIEW_RADIUS) {
+      player.following = null;
+      player.message('You have lost them.');
+      return;
+    }
+    // Re-path only when we are out of step, so following does not fight the
+    // movement code every tick.
+    if (chebyshev(player, target) <= 1) {
+      player.path = [];
+      player.dir = directionTo(player.x, player.y, target.x, target.y);
+      return;
+    }
+    if (player.path.length === 0) {
+      player.path = findPath(this.blockedFor(player), player.x, player.y, target.x, target.y, 1, this.world.size);
     }
   }
 
@@ -398,6 +443,8 @@ export class GameWorld {
   }
 
   killPlayer(player, killer) {
+    endTradeFor(player, 'The trade was cancelled.');
+    player.following = null;
     const drops = player.onDeath();
     for (const drop of drops) {
       this.dropItem(drop.id, drop.count, player.x, player.y, killer?.kind === 'player' ? killer.id : null);
@@ -659,6 +706,8 @@ export class GameWorld {
         region: regionAt(player.x, player.y),
         dead: player.dead,
         target: player.target?.id ?? null,
+        following: player.following,
+        trading: !!player.trade,
       },
       players,
       npcs,
@@ -726,6 +775,12 @@ export class GameWorld {
         return this.handleSetting(player, msg);
       case 'chat':
         return this.handleChat(player, msg);
+      case 'friend':
+        return handleFriend(this, player, msg);
+      case 'pm':
+        return handlePrivateMessage(this, player, msg);
+      case 'trade':
+        return handleTrade(this, player, msg);
       default:
         return undefined;
     }
@@ -733,6 +788,11 @@ export class GameWorld {
 
   handleWalk(player, { x, y }) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (player.trade) {
+      player.message('You cannot move while trading.');
+      return;
+    }
+    player.following = null;
     const tx = Math.max(0, Math.min(this.world.size - 1, Math.round(x)));
     const ty = Math.max(0, Math.min(this.world.size - 1, Math.round(y)));
     player.action = null;
@@ -745,6 +805,7 @@ export class GameWorld {
   queue(player, kind, id, range, run) {
     player.action = null;
     player.target = null;
+    player.following = null;
     player.pending = { kind, id, index: id, range, run };
     const target = this.pendingTarget(player.pending);
     if (!target) {
@@ -773,10 +834,27 @@ export class GameWorld {
     if (kind === 'player') {
       const other = this.players.get(msg.id);
       if (!other || other === player) return;
-      if (msg.option === 'attack') {
-        return this.queue(player, 'player', msg.id, combatRange(player), (target) => {
-          player.target = target;
-        });
+      switch (msg.option) {
+        case 'attack':
+          return this.queue(player, 'player', msg.id, combatRange(player), (target) => {
+            player.target = target;
+          });
+        case 'follow':
+          player.following = other.id;
+          player.action = null;
+          player.pending = null;
+          player.target = null;
+          player.message(`You are now following ${other.display}.`);
+          return undefined;
+        case 'trade':
+          return handleTrade(this, player, { act: 'request', id: other.id });
+        case 'addfriend':
+          return handleFriend(this, player, { act: 'add', name: other.name });
+        case 'examine':
+          player.message(`${other.display} is a level ${other.combatLevel} adventurer.`);
+          return undefined;
+        default:
+          return undefined;
       }
     }
     return undefined;
@@ -1394,7 +1472,10 @@ export class GameWorld {
     if (!clean.trim()) return;
     player.chat = { text: clean, ticks: 8 };
     for (const other of this.players.values()) {
-      if (chebyshev(player, other) <= VIEW_RADIUS) other.send('message', { text: `${player.name}: ${clean}`, chat: true });
+      if (other.ignores.has(player.name)) continue;
+      if (chebyshev(player, other) <= VIEW_RADIUS) {
+        other.send('message', { text: `${player.display}: ${clean}`, chat: true });
+      }
     }
   }
 }

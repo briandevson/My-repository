@@ -30,17 +30,22 @@ export class UI {
     this.self = null;
     this.quests = {};
     this.contextOpen = false;
+    this.friends = [];
+    this.friendNames = new Set();
+    this.trade = null;
 
     this.bindLogin();
     this.bindTabs();
     this.bindChat();
     this.bindOrbs();
     this.bindGlobal();
+    this.bindSocial();
     this.renderInventory([]);
     this.renderCombatPage();
     this.renderPrayerPage();
     this.renderMagicPage();
     this.renderQuestPage();
+    this.renderFriends([]);
   }
 
   // --- Wiring --------------------------------------------------------------
@@ -95,6 +100,9 @@ export class UI {
   setOfflineMode() {
     this.offlineMode = true;
     document.body.classList.add('offline');
+    // Single player: there is nobody to befriend, message, follow or trade with.
+    document.querySelector('.tab[data-tab="social"]')?.remove();
+    $('page-social')?.remove();
     $('login-pass').value = 'local';
     $('login-go').textContent = 'Enter the world';
     $('login-name').placeholder = 'name your character';
@@ -104,6 +112,188 @@ export class UI {
       $('chatinput').placeholder = 'Tap to chat';
     }
     this.renderQuestPage();
+  }
+
+  bindSocial() {
+    if (!$('friend-add')) return;
+    const add = () => {
+      const name = $('friend-name').value.trim();
+      if (!name) return;
+      $('friend-name').value = '';
+      this.handlers.onFriend('add', name);
+    };
+    $('friend-add').addEventListener('click', add);
+    $('friend-name').addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter') add();
+    });
+  }
+
+  /** Friends list with live presence; offline friends sink to the bottom. */
+  renderFriends(friends, ignores = []) {
+    this.friends = friends;
+    this.friendNames = new Set(friends.map((friend) => friend.name));
+    const list = $('friends-list');
+    // The single-player build removes the social panel entirely, but the world
+    // still announces an (empty) friends list on login - there is nothing to
+    // draw, and throwing here would abort the rest of the login.
+    if (!list) return;
+    list.replaceChildren();
+
+    if (friends.length === 0) {
+      const note = document.createElement('div');
+      note.className = 'empty-note';
+      note.textContent = 'No friends yet. Add someone by name above, or press and hold a player in the world and choose Add friend. Friends show as green dots on the minimap.';
+      list.appendChild(note);
+    }
+
+    const sorted = [...friends].sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
+    for (const friend of sorted) {
+      const row = document.createElement('div');
+      row.className = friend.online ? 'option-row friend-row online' : 'option-row friend-row';
+      row.innerHTML = `<span class="dot"></span><span class="who">${escapeHtml(friend.display)}</span><span class="meta">${friend.online ? 'online' : 'offline'}</span>`;
+      row.addEventListener('click', (event) => {
+        const options = [];
+        if (friend.online) {
+          options.push({ label: `Message ${friend.display}`, run: () => this.promptMessage(friend) });
+        }
+        options.push({ label: 'Remove from friends', run: () => this.handlers.onFriend('remove', friend.name) });
+        options.push({ label: 'Ignore', run: () => this.handlers.onFriend('add', friend.name, 'ignore') });
+        this.showContextMenu(event.clientX, event.clientY, friend.display, options);
+      });
+      list.appendChild(row);
+    }
+
+    const block = $('ignore-block');
+    if (!block) return;
+    block.replaceChildren();
+    if (ignores.length > 0) {
+      const heading = document.createElement('div');
+      heading.className = 'empty-note';
+      heading.textContent = 'Ignored';
+      block.appendChild(heading);
+      for (const entry of ignores) {
+        const row = document.createElement('div');
+        row.className = 'option-row';
+        row.innerHTML = `<span>${escapeHtml(entry.display)}</span><span class="meta">tap to unignore</span>`;
+        row.addEventListener('click', () => this.handlers.onFriend('remove', entry.name, 'ignore'));
+        block.appendChild(row);
+      }
+    }
+  }
+
+  /** Compose a private message to a friend. */
+  promptMessage(friend) {
+    this.openModal(`
+      <button class="close">Close</button>
+      <h2>Message ${escapeHtml(friend.display)}</h2>
+      <div class="social-add">
+        <input id="pm-text" maxlength="120" placeholder="say something" />
+        <button id="pm-send">Send</button>
+      </div>`);
+    const send = () => {
+      const text = $('pm-text').value.trim();
+      if (text) this.handlers.onPrivateMessage(friend.name, text);
+      this.closeModal();
+    };
+    $('pm-send').addEventListener('click', send);
+    $('pm-text').addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter') send();
+    });
+    $('pm-text').focus();
+  }
+
+  isFriend(name) {
+    return this.friendNames.has(String(name ?? '').toLowerCase().replace(/ /g, '_'));
+  }
+
+  // --- Trade ---------------------------------------------------------------
+
+  /**
+   * Two-stage trade screen. Stage one is the offer, stage two is a
+   * confirmation of exactly what is on the table - any change sends both
+   * sides back to stage one.
+   */
+  showTrade(state) {
+    this.trade = state;
+    const stageTwo = state.stage === 2;
+    const status = stageTwo
+      ? `Check the offer carefully, then confirm. ${state.theyAccepted ? `<b>${escapeHtml(state.with)} has confirmed.</b>` : `Waiting for ${escapeHtml(state.with)}.`}`
+      : `${state.theyAccepted ? `<b>${escapeHtml(state.with)} has accepted.</b>` : `Waiting for ${escapeHtml(state.with)} to accept.`} Changing an offer resets both sides.`;
+
+    if (!$('trade-window')) {
+      this.openModal(`
+        <button class="close" id="trade-decline">Decline</button>
+        <h2 id="trade-title"></h2>
+        <div id="trade-window">
+          <div class="trade-status" id="trade-status"></div>
+          <div class="trade-columns">
+            <div class="trade-column"><h3>Your offer</h3><div class="trade-offer" id="trade-yours"></div></div>
+            <div class="trade-column"><h3 id="trade-theirs-title">Their offer</h3><div class="trade-offer" id="trade-theirs"></div></div>
+          </div>
+          <div id="trade-inventory-block">
+            <h3 class="trade-column">Your pack - pick an item to offer it</h3>
+            <div class="bank-grid" id="trade-inventory"></div>
+          </div>
+          <div class="trade-actions">
+            <button id="trade-accept" class="primary"></button>
+          </div>
+        </div>`);
+      $('trade-decline').addEventListener('click', () => this.handlers.onTrade('decline'));
+      $('trade-accept').addEventListener('click', () => this.handlers.onTrade('accept'));
+    }
+
+    $('trade-title').textContent = `Trading with ${state.with}`;
+    $('trade-theirs-title').textContent = `${state.with}'s offer`;
+    $('trade-status').innerHTML = status;
+    $('trade-accept').textContent = state.youAccepted
+      ? 'Waiting for them...'
+      : stageTwo
+        ? 'Confirm trade'
+        : 'Accept offer';
+    $('trade-accept').classList.toggle('accepted', !!state.youAccepted);
+    $('trade-inventory-block').style.display = stageTwo ? 'none' : '';
+
+    const fill = (id, items, onClick) => {
+      const grid = $(id);
+      grid.replaceChildren();
+      for (const slot of items.filter(Boolean)) {
+        const cell = document.createElement('div');
+        cell.className = 'slot filled';
+        cell.innerHTML = `<span class="count">${slot.count > 1 ? formatCount(slot.count) : ''}</span>${shortName(safeItem(slot.id).name)}`;
+        cell.title = safeItem(slot.id).name;
+        if (onClick) cell.addEventListener('click', () => onClick(items.indexOf(slot), slot));
+        grid.appendChild(cell);
+      }
+    };
+
+    fill('trade-yours', state.yours, stageTwo ? null : (index, slot) => this.handlers.onTrade('withdraw', { slot: index, count: slot.count }));
+    fill('trade-theirs', state.theirs, null);
+    if (!stageTwo) {
+      const grid = $('trade-inventory');
+      grid.replaceChildren();
+      this.inventory.forEach((slot, index) => {
+        if (!slot) return;
+        grid.appendChild(
+          this.makeTransferSlot(slot, `Offer ${safeItem(slot.id).name}`, (count) => this.handlers.onTrade('offer', { slot: index, count })),
+        );
+      });
+    }
+  }
+
+  /**
+   * The server sends the trade state as soon as an offer changes, but the
+   * inventory only flushes at the end of the tick - so re-render the pack when
+   * it lands, or offered items linger in it.
+   */
+  refreshTrade() {
+    if (this.trade) this.showTrade(this.trade);
+  }
+
+  closeTrade() {
+    this.trade = null;
+    this.closeModal();
   }
 
   bindChat() {
@@ -589,7 +779,7 @@ export class UI {
     }
     for (const item of ground) plot(item.x, item.y, '#ff4fd8', 3);
     for (const npc of npcs) plot(npc.x, npc.y, npc.level > 0 ? '#e04a3a' : '#f0d060', 4);
-    for (const player of players) plot(player.x, player.y, '#ffffff', 4);
+    for (const player of players) plot(player.x, player.y, this.isFriend(player.name) ? '#4ade80' : '#ffffff', 4);
     plot(self.x, self.y, '#ffe066', 6);
   }
 }

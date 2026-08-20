@@ -46,6 +46,7 @@
           <button class="tab" data-tab="combat" title="Combat options">Combat</button>
           <button class="tab" data-tab="prayer" title="Prayer">Prayer</button>
           <button class="tab" data-tab="magic" title="Spellbook">Magic</button>
+          <button class="tab" data-tab="social" title="Friends and messages">Social</button>
           <button class="tab" data-tab="quests" title="Quests and help">Info</button>
         </div>
         <div id="panel-body">
@@ -58,6 +59,14 @@
           <div class="page" id="page-combat"><div id="combat-styles"></div><div id="combat-info"></div></div>
           <div class="page" id="page-prayer"><div id="prayer-list"></div></div>
           <div class="page" id="page-magic"><div id="spell-list"></div></div>
+          <div class="page" id="page-social">
+            <div class="social-add">
+              <input id="friend-name" maxlength="12" placeholder="friend's name" />
+              <button id="friend-add" title="Add to friends">Add</button>
+            </div>
+            <div id="friends-list"></div>
+            <div id="ignore-block"></div>
+          </div>
           <div class="page" id="page-quests"><div id="quest-list"></div></div>
         </div>
       </div>

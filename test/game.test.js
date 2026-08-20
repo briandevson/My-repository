@@ -337,3 +337,164 @@ test('a fire lit under the player moves them clear of it', () => {
   assert.deepEqual({ x: fire.x, y: fire.y }, from, 'the fire is where the player stood');
   assert.notDeepEqual({ x: player.x, y: player.y }, from, 'the player stepped aside');
 });
+
+// --- Social -----------------------------------------------------------------
+
+function twoPlayers() {
+  const world = new GameWorld(0x5eed1234);
+  const make = (name) => {
+    const sent = [];
+    const player = new Player(name, { readyState: 1, send: (data) => sent.push(JSON.parse(data)) });
+    giveStarterKit(player);
+    world.addPlayer(player);
+    player.sent = sent;
+    return player;
+  };
+  const a = make('alice');
+  const b = make('bob');
+  b.x = a.x + 1;
+  b.y = a.y;
+  return { world, a, b };
+}
+
+const lastOf = (player, op) => player.sent.filter((msg) => msg.op === op).pop();
+
+test('friends list tracks presence and survives a save', () => {
+  const { world, a, b } = twoPlayers();
+  world.handleMessage(a, { op: 'friend', act: 'add', name: 'Bob' });
+
+  const list = lastOf(a, 'friends');
+  assert.equal(list.friends.length, 1);
+  assert.equal(list.friends[0].name, 'bob');
+  assert.equal(list.friends[0].online, true, 'bob is logged in');
+
+  world.removePlayer(b);
+  const afterLogout = lastOf(a, 'friends');
+  assert.equal(afterLogout.friends[0].online, false, 'and shows offline once he leaves');
+
+  const restored = new Player('alice', { readyState: 1, send() {} });
+  restored.loadSave(a.toSave());
+  assert.ok(restored.friends.has('bob'), 'the list is saved with the character');
+});
+
+test('private messages reach the other player and respect the ignore list', () => {
+  const { world, a, b } = twoPlayers();
+  world.handleMessage(a, { op: 'pm', to: 'bob', text: 'meet me at the bank' });
+  assert.ok(b.sent.some((msg) => msg.pm && msg.text === 'Alice tells you: meet me at the bank'));
+  assert.ok(a.sent.some((msg) => msg.pm && msg.text === 'You tell Bob: meet me at the bank'));
+
+  world.handleMessage(b, { op: 'friend', act: 'add', name: 'alice', list: 'ignore' });
+  b.sent.length = 0;
+  world.handleMessage(a, { op: 'pm', to: 'bob', text: 'hello?' });
+  assert.equal(b.sent.filter((msg) => msg.pm).length, 0, 'an ignored sender gets through to nobody');
+
+  b.sent.length = 0;
+  world.handleMessage(a, { op: 'chat', text: 'public words' });
+  assert.equal(b.sent.filter((msg) => msg.chat).length, 0, 'public chat is filtered too');
+});
+
+test('following walks you to the other player and stops when they log out', () => {
+  const { world, a, b } = twoPlayers();
+  b.x = a.x + 6;
+  world.handleAction(a, { kind: 'player', id: b.id, option: 'follow' });
+  assert.equal(a.following, b.id);
+
+  for (let i = 0; i < 12; i++) world.tick();
+  assert.ok(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= 1, 'caught up');
+
+  world.removePlayer(b);
+  assert.equal(a.following, null, 'following ends when they leave');
+});
+
+test('a trade needs both sides to ask, then both to accept twice', () => {
+  const { world, a, b } = twoPlayers();
+  addItem(a.inventory, 'coins', 500);
+  addItem(b.inventory, 'iron_sword', 1);
+
+  world.handleAction(a, { kind: 'player', id: b.id, option: 'trade' });
+  assert.equal(a.trade, null, 'one request alone does not open a trade');
+  world.handleAction(b, { kind: 'player', id: a.id, option: 'trade' });
+  assert.ok(a.trade && b.trade, 'both asked, so the screen opens');
+
+  // The starter kit already carries coins, so offer whatever the stack holds.
+  const coins = a.inventory.findIndex((slot) => slot?.id === 'coins');
+  const purse = a.inventory[coins].count;
+  world.handleMessage(a, { op: 'trade', act: 'offer', slot: coins, count: purse });
+  const sword = b.inventory.findIndex((slot) => slot?.id === 'iron_sword');
+  world.handleMessage(b, { op: 'trade', act: 'offer', slot: sword, count: 1 });
+
+  assert.equal(countOf(a.inventory, 'coins'), 0, 'offered items are held in escrow');
+  assert.equal(countOf(b.inventory, 'iron_sword'), 0);
+
+  const session = a.trade;
+  world.handleMessage(a, { op: 'trade', act: 'accept' });
+  world.handleMessage(b, { op: 'trade', act: 'accept' });
+  assert.equal(session.stage, 2, 'both accepted, so the confirmation screen opens');
+  assert.equal(session.accepted.get(a.id), false, 'and acceptance is asked for again');
+
+  world.handleMessage(a, { op: 'trade', act: 'accept' });
+  world.handleMessage(b, { op: 'trade', act: 'accept' });
+
+  assert.equal(a.trade, null, 'the trade closes');
+  assert.equal(countOf(a.inventory, 'iron_sword'), 1, 'alice got the sword');
+  assert.equal(countOf(b.inventory, 'coins'), purse + 50, 'bob got the coins on top of his own');
+});
+
+test('changing an offer resets both acceptances', () => {
+  const { world, a, b } = twoPlayers();
+  addItem(a.inventory, 'coins', 100);
+  world.handleAction(a, { kind: 'player', id: b.id, option: 'trade' });
+  world.handleAction(b, { kind: 'player', id: a.id, option: 'trade' });
+  const session = a.trade;
+
+  world.handleMessage(a, { op: 'trade', act: 'accept' });
+  world.handleMessage(b, { op: 'trade', act: 'accept' });
+  assert.equal(session.stage, 2);
+
+  // Sneaking an item out after agreement must throw both sides back.
+  const coins = a.inventory.findIndex((slot) => slot?.id === 'coins');
+  world.handleMessage(a, { op: 'trade', act: 'offer', slot: coins, count: 100 });
+  assert.equal(session.stage, 1, 'back to the offer screen');
+  assert.equal(session.accepted.get(a.id), false);
+  assert.equal(session.accepted.get(b.id), false);
+});
+
+test('a cancelled trade returns every escrowed item', () => {
+  const { world, a, b } = twoPlayers();
+  addItem(a.inventory, 'coal', 7);
+  const before = countOf(a.inventory, 'coal');
+
+  world.handleAction(a, { kind: 'player', id: b.id, option: 'trade' });
+  world.handleAction(b, { kind: 'player', id: a.id, option: 'trade' });
+  const coal = a.inventory.findIndex((slot) => slot?.id === 'coal');
+  world.handleMessage(a, { op: 'trade', act: 'offer', slot: coal, count: 7 });
+  assert.equal(countOf(a.inventory, 'coal'), before - 1, 'coal does not stack, so one slot moved');
+
+  world.handleMessage(b, { op: 'trade', act: 'decline' });
+  assert.equal(a.trade, null);
+  assert.equal(countOf(a.inventory, 'coal'), before, 'the escrowed coal came back');
+});
+
+test('logging out or dying mid-trade returns the items', () => {
+  const { world, a, b } = twoPlayers();
+  addItem(a.inventory, 'coins', 250);
+  const purse = countOf(a.inventory, 'coins');
+  world.handleAction(a, { kind: 'player', id: b.id, option: 'trade' });
+  world.handleAction(b, { kind: 'player', id: a.id, option: 'trade' });
+  const coins = a.inventory.findIndex((slot) => slot?.id === 'coins');
+  world.handleMessage(a, { op: 'trade', act: 'offer', slot: coins, count: purse });
+
+  world.removePlayer(b);
+  assert.equal(a.trade, null, 'the trade is cancelled');
+  assert.equal(countOf(a.inventory, 'coins'), purse, 'alice has her coins back');
+});
+
+test('you cannot walk away mid-trade', () => {
+  const { world, a, b } = twoPlayers();
+  world.handleAction(a, { kind: 'player', id: b.id, option: 'trade' });
+  world.handleAction(b, { kind: 'player', id: a.id, option: 'trade' });
+  const where = { x: a.x, y: a.y };
+  world.handleMessage(a, { op: 'walk', x: a.x + 5, y: a.y + 5 });
+  assert.equal(a.path.length, 0);
+  assert.deepEqual({ x: a.x, y: a.y }, where);
+});

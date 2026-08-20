@@ -8,6 +8,8 @@ export const WORLD_SEED = 0x5eed1234;
 export const WATER_LEVEL = 1.0; // world-space height of the lake surface
 
 export const INVENTORY_SIZE = 30;
+export const TRADE_SLOTS = 12;
+export const MAX_FRIENDS = 100;
 export const BANK_SIZE = 96;
 export const MAX_LEVEL = 99;
 export const MAX_STACK = 2147483647;

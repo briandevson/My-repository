@@ -443,6 +443,128 @@ button {
   font-size: 10px;
 }
 
+/* --- Social ------------------------------------------------------------ */
+.social-add {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.social-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 7px;
+  background: #17110c;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.social-add button {
+  padding: 6px 10px;
+  background: #4a3521;
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.friend-row .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b6257;
+  flex: 0 0 auto;
+}
+
+.friend-row.online .dot {
+  background: var(--good);
+  box-shadow: 0 0 6px rgba(123, 208, 106, 0.7);
+}
+
+.friend-row .who {
+  flex: 1;
+  text-align: left;
+}
+
+.empty-note {
+  padding: 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* --- Trade -------------------------------------------------------------- */
+.trade-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.trade-column h3 {
+  margin: 0 0 5px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.trade-offer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  min-height: 70px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.trade-status {
+  padding: 7px 9px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.trade-status b {
+  color: #ffe066;
+}
+
+.trade-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.trade-actions button {
+  flex: 1;
+  padding: 10px;
+  background: #4a3521;
+  border: 1px solid var(--border-bright);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.trade-actions button.primary {
+  background: linear-gradient(#5f7c2a, #44591d);
+}
+
+.trade-actions button.accepted {
+  background: linear-gradient(#3a4a2a, #2a3520);
+  color: var(--muted);
+}
+
+#chatlog .pm {
+  color: #d9a3ff;
+}
+
 /* --- Chat -------------------------------------------------------------- */
 #chat {
   position: absolute;

@@ -12,7 +12,8 @@
     "serve": "node server/index.js",
     "test": "node --test test/*.test.js",
     "test:browser": "node tools/playtest.js",
-    "test:mobile": "node tools/bundle-standalone.js && node tools/mobiletest.js"
+    "test:mobile": "node tools/bundle-standalone.js && node tools/mobiletest.js",
+    "test:social": "node tools/socialtest.js"
   },
   "dependencies": {
     "three": "^0.169.0",

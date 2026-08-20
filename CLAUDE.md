@@ -22,6 +22,7 @@ npm run build             # bundle client/src/main.js -> client/dist/bundle.js
 npm test                  # node --test test/*.test.js  (fast, no browser)
 npm run test:browser      # boots server + Chromium, plays the game, writes tools/shots/
 npm run test:mobile       # standalone build on an emulated iPhone, touch input
+npm run test:social       # two browsers, two players: friends, PMs, follow, trade
 npm run build:standalone  # dist/aetheria.html - single-player, whole game in one file
 ```
 
@@ -70,6 +71,7 @@ server/    Authoritative game logic. Never trust the client here.
   npc.js         Npc entity: hits, respawn, damage attribution
   combat.js      accuracy and damage rolls (pure functions)
   skills.js      gathering and production skills (pure-ish, take a player)
+  social.js      friends, presence, private messages, trade sessions
   pathfind.js    A* on the tile grid
   container.js   inventory/bank slot mechanics
   persistence.js scrypt-hashed accounts, JSON saves under server/data/players/
@@ -131,6 +133,24 @@ Multi-step choices (what to smelt, what to fletch) go through
 `openMenu(player, title, options, handler)`, which keeps the handler closure on
 the server; the client only ever sends the chosen index.
 
+## Trading
+
+The rules in `server/social.js` exist to make trading unscammable, and changes
+must preserve all four:
+
+1. **Both sides must ask.** A trade only opens when each player has requested
+   the other; a single request is just a message.
+2. **Offered items leave the inventory immediately** and sit in the session's
+   escrow container, so the same item can never be offered and spent at once.
+3. **Any change resets both acceptances** and returns the session to stage one.
+   This is what stops an item being swapped out after the other side agrees.
+4. **Two stages.** Stage one is the offer screen, stage two is a confirmation
+   of exactly what is on the table. Both sides accept in both stages.
+
+Anything that ends a trade - decline, logout, death - goes through
+`cancelTrade`, which returns every escrowed item first. There are tests for
+each of these; treat a failure as a duplication bug, not a flaky test.
+
 ## Adding content
 
 Most content needs no engine changes:
@@ -181,5 +201,7 @@ up in the unit tests.
 - `findPath` scans its open list linearly; a heap would matter for big maps.
 - The world is a single flat level — no floors, ladders or instances.
 - Fletching produces strung bows directly instead of unstrung + bow string.
-- The standalone build is single-player by definition; there is no peer sync.
+- The standalone build is single-player by definition; there is no peer sync,
+  so it has no friends list, messaging or trading (the Social tab is removed).
+- Trading pins both players in place rather than letting them walk.
 - There is no rate limiting on client messages.

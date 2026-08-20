@@ -15,6 +15,8 @@ let selfId = null;
 let latest = { players: [], npcs: [], ground: [], self: null };
 /** Set while the player is mid "Use item on ..." interaction. */
 let pendingUse = null;
+/** Id of the last player who asked to trade, so the offer can be accepted. */
+let lastTradeRequest = null;
 
 /** Exposed for the automated play test in tools/playtest.js. */
 const debug = { net, get scene() { return scene; }, get world() { return world; }, latest, inventory: [] };
@@ -82,6 +84,15 @@ const ui = new UI({
   onShop(act, payload) {
     net.send('shop', { act, ...payload });
   },
+  onFriend(act, name, list) {
+    net.send('friend', { act, name, list });
+  },
+  onPrivateMessage(to, text) {
+    net.send('pm', { to, text });
+  },
+  onTrade(act, payload) {
+    net.send('trade', { act, ...payload });
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -119,7 +130,16 @@ net.on('snapshot', (msg) => {
   ui.drawMinimap(world, msg.self, msg.players.filter((p) => p.id !== selfId), msg.npcs, msg.ground);
 });
 
-net.on('message', (msg) => ui.addMessage(msg.text, msg.chat ? 'chatline' : 'system'));
+net.on('message', (msg) => {
+  ui.addMessage(msg.text, msg.pm ? 'pm' : msg.chat ? 'chatline' : 'system');
+  // A trade request arrives as a message carrying the asker's id, so it can be
+  // answered from the chat log without hunting for them in the world.
+  if (msg.trade) lastTradeRequest = msg.trade;
+});
+net.on('friends', (msg) => ui.renderFriends(msg.friends, msg.ignores));
+net.on('tradeopen', () => ui.addMessage('Trade opened.'));
+net.on('tradeupdate', (msg) => ui.showTrade(msg));
+net.on('tradeclose', () => ui.closeTrade());
 net.on('levelup', (msg) => ui.addMessage(`Level up: ${msg.skill} is now ${msg.level}!`, 'levelup'));
 net.on('stats', (msg) => ui.renderStats(msg.stats, msg.combat, msg.quests));
 net.on('inventory', (msg) => {
@@ -127,6 +147,7 @@ net.on('inventory', (msg) => {
   ui.renderInventory(msg.items);
   ui.refreshBank();
   ui.refreshShop();
+  ui.refreshTrade();
 });
 net.on('equipment', (msg) => ui.renderEquipment(msg.equipment, msg.bonuses));
 net.on('bankdata', (msg) => {
@@ -207,8 +228,18 @@ function optionsFor(hit) {
       options.push({ label: `Talk to ${data.name}`, run: () => send('talk') });
       options.push({ label: `Pickpocket ${data.name}`, run: () => send('pickpocket') });
     } else if (hit.id !== selfId) {
+      const following = latest.self?.following === hit.id;
+      options.push({ label: `Trade with ${data.name}`, run: () => send('trade') });
+      options.push({
+        label: following ? `Stop following ${data.name}` : `Follow ${data.name}`,
+        run: () => (following ? net.send('walk', { x: latest.self.x, y: latest.self.y }) : send('follow')),
+      });
+      if (!ui.isFriend(data.name)) {
+        options.push({ label: `Add ${data.name} to friends`, run: () => send('addfriend') });
+      } else {
+        options.push({ label: `Message ${data.name}`, run: () => ui.promptMessage({ name: data.name.toLowerCase().replace(/ /g, '_'), display: data.name }) });
+      }
       options.push({ label: `Attack ${data.name}`, run: () => send('attack') });
-      options.push({ label: `Follow ${data.name}`, run: () => walkToPick(data) });
     }
     options.push({ label: 'Examine', run: () => send('examine') });
     return options;
@@ -401,6 +432,11 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowUp') scene.cameraPitch = Math.min(1.35, scene.cameraPitch + 0.06);
   if (event.key === 'ArrowDown') scene.cameraPitch = Math.max(0.25, scene.cameraPitch - 0.06);
   if (event.key.toLowerCase() === 'r') net.send('setting', { key: 'run', value: !(latest.self?.running ?? false) });
+  // T answers the most recent trade request.
+  if (event.key.toLowerCase() === 't' && lastTradeRequest !== null) {
+    net.send('trade', { act: 'request', id: lastTradeRequest });
+    lastTradeRequest = null;
+  }
 });
 
 // ---------------------------------------------------------------------------

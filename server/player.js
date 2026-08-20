@@ -54,6 +54,11 @@ export class Player {
     this.quests = { lost_heirloom: 0 };
     this.chat = null; // { text, ticks }
     this.pending = null; // queued interaction waiting on movement
+    this.friends = new Set(); // canonical names
+    this.ignores = new Set();
+    this.following = null; // player id we are tailing
+    this.trade = null; // active TradeSession
+    this.pendingTradeFrom = null; // id of a player who has asked to trade
     this.menu = null; // open server-driven menu
     this.shop = null; // open shop id
     this.damageSplat = null;
@@ -276,6 +281,8 @@ export class Player {
       combatStyle: this.combatStyle,
       spell: this.spell,
       quests: this.quests,
+      friends: [...this.friends],
+      ignores: [...this.ignores],
       energy: this.energy,
       prayerPoints: this.prayerPoints,
     };
@@ -303,6 +310,8 @@ export class Player {
     this.combatStyle = save.combatStyle ?? this.combatStyle;
     this.spell = save.spell ?? this.spell;
     this.quests = { ...this.quests, ...(save.quests ?? {}) };
+    this.friends = new Set(Array.isArray(save.friends) ? save.friends : []);
+    this.ignores = new Set(Array.isArray(save.ignores) ? save.ignores : []);
     this.energy = Number.isFinite(save.energy) ? save.energy : RUN_ENERGY_MAX;
     this.prayerPoints = Number.isFinite(save.prayerPoints) ? save.prayerPoints : this.level('prayer');
   }

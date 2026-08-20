@@ -20,7 +20,8 @@ external assets to download.
 **Single player, in one file** — `npm run build:standalone` bundles the entire
 game, server logic included, into `dist/aetheria.html`. Open that file in any
 browser, including on a phone; the world ticks in the page and your character
-saves to browser storage. No install, no network.
+saves to browser storage. No install, no network. Being single player, it has
+no friends list, messaging or trading — those need the server build.
 
 ## Running it
 
@@ -37,6 +38,7 @@ npm run dev         # esbuild in watch mode alongside the server
 npm test            # unit and integration tests (no browser needed)
 npm run test:browser     # drives the real client in a real browser end to end
 npm run test:mobile      # the standalone build, on an emulated iPhone with touch
+npm run test:social      # two browsers, two players: friends, chat, follow, trade
 npm run build:standalone # dist/aetheria.html - the whole game in one file
 ```
 
@@ -70,6 +72,13 @@ you can actually wear.
 orbits, wheel zooms. Touch: tap acts, long press opens the menu, drag orbits,
 pinch zooms. On phones the side panel becomes a bottom sheet that collapses to
 its tab strip.
+
+**Playing together.** A friends list with live presence — friends show as green
+dots on the minimap and you are told when they log in or out. Private messages,
+an ignore list, a Follow option that tails another player across the map, and
+two-stage trading: both sides must ask, offered items sit in escrow, any change
+resets both acceptances, and a confirmation screen shows exactly what is on the
+table before it completes.
 
 **The rest.** 30-slot inventory and 96-slot bank, eleven equipment slots,
 shops, prayers that drain points while active, spells that consume runes,
