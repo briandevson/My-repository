@@ -6,6 +6,7 @@
   "description": "Aetheria - a tick-based multiplayer 3D MMORPG in the spirit of early-2000s browser RPGs.",
   "scripts": {
     "build": "node tools/build.js",
+    "build:demo": "node tools/build-demo.js",
     "dev": "node tools/build.js --watch & node server/index.js",
     "start": "node tools/build.js && node server/index.js",
     "serve": "node server/index.js",
@@ -13,7 +14,8 @@
     "test:browser": "node tools/playtest.js",
     "test:mobile": "node tools/mobiletest.js",
     "test:social": "node tools/socialtest.js",
-    "test:db": "node --test test/storage.test.js"
+    "test:db": "node --test test/storage.test.js",
+    "test:demo": "node tools/build-demo.js && node tools/demotest.js"
   },
   "dependencies": {
     "pg": "^8.23.0",

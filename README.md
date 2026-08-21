@@ -84,6 +84,7 @@ npm test            # unit and integration tests (no browser needed)
 npm run test:browser     # drives the real client in a real browser end to end
 npm run test:mobile      # an emulated iPhone joining the server with touch input
 npm run test:social      # two browsers, two players: friends, chat, follow, trade
+npm run build:demo       # dist/aetheria.html - a single-player demo in one file
 ```
 
 ## What is in the world

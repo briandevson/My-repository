@@ -25,6 +25,7 @@ npm test                  # node --test test/*.test.js  (fast, no browser)
 npm run test:browser      # boots server + Chromium, plays the game, writes tools/shots/
 npm run test:mobile       # an emulated iPhone joining the server, touch input
 npm run test:social       # two browsers, two players: friends, PMs, follow, trade
+npm run build:demo        # dist/aetheria.html - a single-player demo in one file
 ```
 
 Environment: `PORT`, `HOST`, `AETHERIA_DATA` (character saves), `DATABASE_URL`
@@ -37,6 +38,18 @@ not regenerated automatically by `npm run serve`.
 
 If Playwright cannot find its browser, `tools/playtest.js` already falls back to
 `/opt/pw-browsers/chromium-*/chrome-linux/chrome`; `CHROMIUM_PATH` overrides it.
+
+## The demo build
+
+The game is online only. `tools/build-demo.js` exists purely to show it to
+someone without a server: an esbuild plugin swaps `client/src/net.js` for
+`tools/demo/net.js`, which runs the same authoritative `GameWorld` inside the
+page and saves the character to browser storage.
+
+Keep the shim in `tools/`. Nothing under `client/` may know the demo exists,
+and nothing in the `server/` module graph may import `node:*` outside
+`index.js`, `persistence.js` and `storage.js`, or the demo stops building.
+`npm run test:demo` checks it on a desktop and an emulated phone.
 
 ## Layout
 
@@ -72,6 +85,7 @@ client/
   src/net.js     WebSocket wrapper
 
 tools/     build.js (esbuild), playtest.js (browser end-to-end test)
+  demo/net.js  DEMO ONLY: swapped in for client/src/net.js by build-demo.js
 test/      node:test unit + integration tests
 ```
 
