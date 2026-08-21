@@ -15,12 +15,12 @@
     "test:social": "node tools/socialtest.js"
   },
   "dependencies": {
-    "three": "^0.169.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
-    "playwright": "^1.62.1"
+    "playwright": "^1.62.1",
+    "three": "^0.169.0"
   },
   "engines": {
     "node": ">=20"

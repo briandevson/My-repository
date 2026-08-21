@@ -27,8 +27,8 @@ npm run test:mobile       # an emulated iPhone joining the server, touch input
 npm run test:social       # two browsers, two players: friends, PMs, follow, trade
 ```
 
-`PORT`, `HOST` and `AETHERIA_DATA` (character save directory) are the only
-environment variables.
+Environment: `PORT`, `HOST`, `AETHERIA_DATA` (character saves), and the public
+server limits `MAX_PLAYERS`, `MAX_PER_ADDRESS`, `TRUST_PROXY`.
 
 **Always rebuild the bundle after touching anything under `client/` or
 `shared/`** — the server serves `client/dist/bundle.js`, which is gitignored and
@@ -115,6 +115,25 @@ them interchangeably. Preserve that when adding entity types.
 Multi-step choices (what to smelt, what to fletch) go through
 `openMenu(player, title, options, handler)`, which keeps the handler closure on
 the server; the client only ever sends the chosen index.
+
+## Deployment
+
+`Dockerfile` builds the client with the full toolchain and ships a runtime with
+production dependencies only - so **nothing under `server/` or `shared/` may
+import a devDependency**, `three` included. `fly.toml` and `docker-compose.yml`
+both mount a volume at `/data` for `AETHERIA_DATA`; character saves are the only
+state worth keeping, and losing them is the one unrecoverable mistake here.
+
+`server/limits.js` holds the abuse limits, which exist because the port is
+public: a token bucket per connection, a tighter one for chat, a per-address
+failed-login throttle, a connection cap per address, and a heartbeat that drops
+sockets phones abandoned. Tune the numbers, but do not remove the layers. The
+tests assert that ordinary heavy play is never throttled - if that test starts
+failing, the limits are too tight for real players, not too loose.
+
+Set `TRUST_PROXY=1` only when something really does sit in front: the
+forwarded header is trivially forged, and trusting it without a proxy lets one
+client bypass every per-address limit.
 
 ## Accounts
 

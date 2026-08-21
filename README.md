@@ -24,6 +24,40 @@ Open <http://localhost:8080>, pick a name and a password, and choose **Create
 character**. Names are unique across the server and ignore capitals, so `Gwyn`
 and `gwyn` are the same character and only one person can have it.
 
+## Hosting it so friends can just click a link
+
+Everything needed to deploy is in the repo. Characters live on a mounted
+volume, so a redeploy never wipes them.
+
+**Fly.io** — the shape that suits a game server: WebSockets, a persistent
+volume, and a machine that does not sleep.
+
+```bash
+fly launch --no-deploy          # claim an app name; keeps the fly.toml here
+fly volumes create characters --size 1
+fly deploy
+```
+
+**Any machine with Docker** — a VPS, a spare box, a Pi:
+
+```bash
+docker compose up -d            # serves on :8080, characters in a named volume
+```
+
+Put a reverse proxy in front for TLS (Caddy needs two lines), and set
+`TRUST_PROXY=1` so the per-address limits see real client addresses rather than
+the proxy's.
+
+`GET /healthz` reports player count and uptime for the host's health checks.
+
+### Once it is public
+
+Defaults are set for a small server and can be raised with environment
+variables: `MAX_PLAYERS` (100), `MAX_PER_ADDRESS` (4), `PORT`, `HOST`,
+`AETHERIA_DATA`. The server rate-limits every connection, meters chat
+separately, throttles failed logins per address, caps message size, and pings
+sockets to drop the ones phones left behind.
+
 ## Playing with friends
 
 Everyone who connects to the same server shares one world, so friends just need
@@ -31,8 +65,9 @@ to reach your machine:
 
 - **Same house or office** — they open `http://<your-computer's-ip>:8080`.
   `npm start` already listens on every interface; `HOST` and `PORT` override it.
-- **Over the internet** — put it behind a tunnel (`cloudflared`, `ngrok`) or run
-  it on a small VPS. It is a plain HTTP + WebSocket server on one port.
+- **Over the internet** — deploy it (above), or put a tunnel in front
+  (`cloudflared`, `ngrok`) for a quick session. It is a plain HTTP + WebSocket
+  server on one port.
 
 Phones are first-class clients: the same world, the same social features, driven
 by taps instead of clicks.

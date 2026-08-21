@@ -1,0 +1,17 @@
+# Self-hosting on any machine with Docker: `docker compose up -d`.
+services:
+  aetheria:
+    build: .
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    environment:
+      # Set to 1 only when a reverse proxy sits in front, or the per-address
+      # limits can be bypassed with a forged header.
+      TRUST_PROXY: '0'
+      MAX_PLAYERS: '100'
+    volumes:
+      - characters:/data
+
+volumes:
+  characters:
