@@ -6,7 +6,7 @@ import { WebSocketServer } from 'ws';
 
 import { GameWorld } from './world.js';
 import { Player, giveStarterKit } from './player.js';
-import { authenticate, persistPlayer } from './persistence.js';
+import { authenticate, persistPlayer, initStorage, describeStorage } from './persistence.js';
 import { ConnectionLimiter, LoginThrottle, clientAddress } from './limits.js';
 import { WORLD_SEED } from '../shared/constants.js';
 
@@ -38,6 +38,8 @@ const MIME = {
 };
 
 const world = new GameWorld(WORLD_SEED);
+// Characters must be reachable before anyone can log in.
+await initStorage();
 world.start();
 
 const httpServer = createServer(async (req, res) => {
@@ -81,6 +83,7 @@ const wss = new WebSocketServer({ server: httpServer, maxPayload: MAX_MESSAGE_BY
 
 wss.on('connection', (socket, request) => {
   let player = null;
+  let authenticating = false;
   const address = clientAddress(request, TRUST_PROXY);
   const limiter = new ConnectionLimiter();
   let lastSlowNotice = 0;
@@ -97,7 +100,7 @@ wss.on('connection', (socket, request) => {
   }
   connectionsByAddress.set(address, open + 1);
 
-  socket.on('message', (raw) => {
+  socket.on('message', async (raw) => {
     let msg;
     try {
       msg = JSON.parse(raw.toString());
@@ -124,6 +127,9 @@ wss.on('connection', (socket, request) => {
 
     if (!player) {
       if (msg.op !== 'login') return;
+      // Authentication awaits storage; without this a client could fire two
+      // logins and end up with two Players on one socket.
+      if (authenticating) return;
       if (world.players.size >= MAX_PLAYERS) {
         socket.send(JSON.stringify({ op: 'error', reason: 'The world is full. Please try again shortly.' }));
         return;
@@ -132,13 +138,25 @@ wss.on('connection', (socket, request) => {
         socket.send(JSON.stringify({ op: 'error', reason: 'Too many failed attempts. Wait a few minutes and try again.' }));
         return;
       }
-      const result = authenticate(msg.name, msg.password, !!msg.create);
+      authenticating = true;
+      let result;
+      try {
+        result = await authenticate(msg.name, msg.password, !!msg.create);
+      } catch (error) {
+        console.error('[login]', error);
+        socket.send(JSON.stringify({ op: 'error', reason: 'The character store is unavailable. Try again shortly.' }));
+        return;
+      } finally {
+        authenticating = false;
+      }
       if (!result.ok) {
         loginThrottle.fail(address);
         socket.send(JSON.stringify({ op: 'error', reason: result.reason }));
         return;
       }
       loginThrottle.succeed(address);
+      // The socket may have closed while we were waiting on storage.
+      if (socket.readyState !== 1) return;
       // One session per character, so a name is never in the world twice.
       for (const online of world.players.values()) {
         if (online.name === result.name) {
@@ -169,9 +187,10 @@ wss.on('connection', (socket, request) => {
     if (remaining <= 0) connectionsByAddress.delete(address);
     else connectionsByAddress.set(address, remaining);
     if (!player) return;
-    persistPlayer(player);
-    world.removePlayer(player);
-    console.log(`[logout] ${player.display} (${world.players.size} online)`);
+    const leaving = player;
+    persistPlayer(leaving).catch((error) => console.error('[save]', error));
+    world.removePlayer(leaving);
+    console.log(`[logout] ${leaving.display} (${world.players.size} online)`);
   });
 
   socket.on('error', (error) => console.error('[socket]', error.message));
@@ -179,8 +198,15 @@ wss.on('connection', (socket, request) => {
 
 // Periodic autosave so a crash costs at most a minute of progress.
 setInterval(() => {
-  for (const player of world.players.values()) persistPlayer(player);
+  saveEveryone().catch((error) => console.error('[autosave]', error));
 }, AUTOSAVE_TICKS * 600);
+
+async function saveEveryone() {
+  const saves = [...world.players.values()].map((player) =>
+    persistPlayer(player).catch((error) => console.error(`[save] ${player.name}:`, error)),
+  );
+  await Promise.all(saves);
+}
 
 // Phones suspend sockets without closing them; ping to find the dead ones.
 setInterval(() => {
@@ -199,14 +225,26 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`Aetheria server listening on http://${HOST}:${PORT}`);
   console.log(`Limits: ${MAX_PLAYERS} players, ${MAX_PER_ADDRESS} connections per address, proxy headers ${TRUST_PROXY ? 'trusted' : 'ignored'}`);
   console.log(`World seed ${WORLD_SEED}, ${world.npcs.length} NPCs, ${world.world.objects.length} objects`);
+  console.log(`Characters stored in ${describeStorage()}`);
 });
 
+let shuttingDown = false;
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log('\nSaving players and shutting down...');
-    for (const player of world.players.values()) persistPlayer(player);
     world.stop();
-    httpServer.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 1000).unref();
+    // Hosts send SIGTERM before stopping the container, so the save has to
+    // finish before the process exits - but never hang the shutdown on it.
+    const deadline = setTimeout(() => process.exit(0), 5000);
+    deadline.unref();
+    saveEveryone()
+      .catch((error) => console.error('[shutdown]', error))
+      .finally(() => {
+        clearTimeout(deadline);
+        httpServer.close(() => process.exit(0));
+        setTimeout(() => process.exit(0), 1000).unref();
+      });
   });
 }

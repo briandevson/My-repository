@@ -26,6 +26,11 @@ and `gwyn` are the same character and only one person can have it.
 
 ## Hosting it so friends can just click a link
 
+**Running it for free?** See [docs/hosting.md](docs/hosting.md) — free tiers
+almost all have an ephemeral filesystem, so set `DATABASE_URL` to a free
+Postgres and characters survive the restarts.
+
+
 Everything needed to deploy is in the repo. Characters live on a mounted
 volume, so a redeploy never wipes them.
 
@@ -54,7 +59,8 @@ the proxy's.
 
 Defaults are set for a small server and can be raised with environment
 variables: `MAX_PLAYERS` (100), `MAX_PER_ADDRESS` (4), `PORT`, `HOST`,
-`AETHERIA_DATA`. The server rate-limits every connection, meters chat
+`AETHERIA_DATA`, and `DATABASE_URL` to keep characters in Postgres instead of
+on disk. The server rate-limits every connection, meters chat
 separately, throttles failed logins per address, caps message size, and pings
 sockets to drop the ones phones left behind.
 

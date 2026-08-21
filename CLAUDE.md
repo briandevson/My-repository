@@ -27,8 +27,9 @@ npm run test:mobile       # an emulated iPhone joining the server, touch input
 npm run test:social       # two browsers, two players: friends, PMs, follow, trade
 ```
 
-Environment: `PORT`, `HOST`, `AETHERIA_DATA` (character saves), and the public
-server limits `MAX_PLAYERS`, `MAX_PER_ADDRESS`, `TRUST_PROXY`.
+Environment: `PORT`, `HOST`, `AETHERIA_DATA` (character saves), `DATABASE_URL`
+(Postgres instead of files), and the public server limits `MAX_PLAYERS`,
+`MAX_PER_ADDRESS`, `TRUST_PROXY`.
 
 **Always rebuild the bundle after touching anything under `client/` or
 `shared/`** — the server serves `client/dist/bundle.js`, which is gitignored and
@@ -59,7 +60,8 @@ server/    Authoritative game logic. Never trust the client here.
   social.js      friends, presence, private messages, trade sessions
   pathfind.js    A* on the tile grid
   container.js   inventory/bank slot mechanics
-  persistence.js scrypt-hashed accounts, JSON saves under server/data/players/
+  persistence.js scrypt-hashed accounts, async and storage-backed
+  storage.js     where characters live: files, Postgres, or memory (tests)
 
 client/
   index.html, style.css
@@ -134,6 +136,22 @@ failing, the limits are too tight for real players, not too loose.
 Set `TRUST_PROXY=1` only when something really does sit in front: the
 forwarded header is trivially forged, and trusting it without a proxy lets one
 client bypass every per-address limit.
+
+## Where characters live
+
+`storage.js` has three backends behind one async interface - files (default),
+Postgres (`DATABASE_URL`) and memory (tests). Free hosts wipe the filesystem on
+every restart and idle spin-down, so a deployed server needs the database one or
+everyone's progress vanishes overnight; `docs/hosting.md` covers the options.
+
+Persistence is therefore **async all the way down**. Two consequences worth
+keeping: `server/index.js` guards the login handler with an `authenticating`
+flag, because a client can send two logins while the first awaits storage and
+end up with two Players on one socket; and SIGTERM saves everyone before
+exiting, since that is how a host tells the container to stop.
+
+`npm run test:db` runs the storage suite against `TEST_DATABASE_URL`; without
+one the Postgres cases skip rather than fail.
 
 ## Accounts
 

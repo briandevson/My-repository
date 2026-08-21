@@ -12,9 +12,11 @@
     "test": "node --test test/*.test.js",
     "test:browser": "node tools/playtest.js",
     "test:mobile": "node tools/mobiletest.js",
-    "test:social": "node tools/socialtest.js"
+    "test:social": "node tools/socialtest.js",
+    "test:db": "node --test test/storage.test.js"
   },
   "dependencies": {
+    "pg": "^8.23.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
