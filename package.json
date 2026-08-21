@@ -1,0 +1,28 @@
+{
+  "name": "aetheria",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Aetheria - a tick-based multiplayer 3D MMORPG in the spirit of early-2000s browser RPGs.",
+  "scripts": {
+    "build": "node tools/build.js",
+    "dev": "node tools/build.js --watch & node server/index.js",
+    "start": "node tools/build.js && node server/index.js",
+    "serve": "node server/index.js",
+    "test": "node --test test/*.test.js",
+    "test:browser": "node tools/playtest.js",
+    "test:mobile": "node tools/mobiletest.js",
+    "test:social": "node tools/socialtest.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "playwright": "^1.62.1",
+    "three": "^0.169.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

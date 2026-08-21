@@ -1,0 +1,875 @@
+@import url('https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;700&family=IM+Fell+English+SC&display=swap');
+
+:root {
+  --display: 'IM Fell English SC', 'Palatino Linotype', Palatino, Georgia, serif;
+  --ui: 'Alegreya Sans', 'Trebuchet MS', system-ui, -apple-system, sans-serif;
+  --panel: #2b2119;
+  --panel-light: #3a2d22;
+  --border: #6b5334;
+  --border-bright: #a3823f;
+  --text: #efe4cf;
+  --muted: #b9a888;
+  --good: #7bd06a;
+  --bad: #e05c4a;
+  --slot: #1e1711;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* .overlay sets display:flex, which would otherwise beat the [hidden] default
+   and leave an invisible pane eating every click. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #10161d;
+  color: var(--text);
+  font-family: var(--ui);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  /* Stop iOS from panning, pinch-zooming or double-tap-zooming the page while
+     the same gestures drive the camera. */
+  touch-action: none;
+}
+
+/* --- Login ------------------------------------------------------------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 30%, #23384a, #0d1218 70%);
+  z-index: 40;
+}
+
+.login-card {
+  width: min(360px, 90vw);
+  padding: 26px;
+  background: linear-gradient(#33271d, #241b13);
+  border: 2px solid var(--border-bright);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.login-card h1 {
+  margin: 0 0 4px;
+  font-family: var(--display);
+  font-size: 40px;
+  letter-spacing: 3px;
+  color: #f2c96b;
+  text-shadow: 0 2px 0 #000;
+}
+
+.tagline {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-card label {
+  display: block;
+  text-align: left;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.login-card input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px 10px;
+  background: #17110c;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.login-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.login-card button {
+  flex: 1;
+  padding: 11px 8px;
+  background: linear-gradient(#7c5c2a, #5b421d);
+  border: 1px solid var(--border-bright);
+  border-radius: 6px;
+  color: #ffe9b8;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.login-card button:hover {
+  filter: brightness(1.15);
+}
+
+.login-card button.secondary {
+  background: linear-gradient(#3d4a5c, #2b3542);
+  border-color: #6b7f96;
+  color: #dbe6f2;
+}
+
+.error {
+  min-height: 18px;
+  margin: 10px 0 0;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+.hint {
+  margin: 6px 0 0;
+  color: #7d6d55;
+  font-size: 12px;
+}
+
+/* --- HUD --------------------------------------------------------------- */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#hud > * {
+  pointer-events: auto;
+}
+
+#top-left {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+}
+
+#orbs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.orb {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 2px solid var(--border-bright);
+  background: radial-gradient(circle at 35% 30%, #4c3a26, #1d1611);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: bold;
+  text-shadow: 0 1px 2px #000;
+  position: relative;
+  overflow: hidden;
+}
+
+.orb-label {
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+
+.orb-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(#7bd06a88, #3f8a3288);
+  z-index: -1;
+}
+
+#orb-prayer .orb-fill {
+  background: linear-gradient(#8ac6f088, #3a6f9c88);
+}
+
+#orb-energy .orb-fill {
+  background: linear-gradient(#f0d48a88, #9c7a3a88);
+}
+
+#orb-energy.running {
+  border-color: #ffe066;
+}
+
+#top-right {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+#minimap-wrap {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  border: 2px solid var(--border-bright);
+  border-radius: 50%;
+  overflow: hidden;
+  background: #0d1218;
+}
+
+#minimap {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: pointer;
+}
+
+#region {
+  position: absolute;
+  font-family: var(--display);
+  letter-spacing: 1px;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  color: #ffe9b8;
+  text-shadow: 0 1px 3px #000;
+}
+
+/* --- Side panel -------------------------------------------------------- */
+#panel {
+  position: absolute;
+  right: 10px;
+  top: 200px;
+  width: 232px;
+  background: linear-gradient(#332619, #241b13);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+#tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  flex: 1 1 auto;
+  min-width: 42px;
+  padding: 5px 2px;
+  font-size: 11px;
+  background: #1e1711;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.tab.active {
+  background: #4d3a22;
+  color: #ffe9b8;
+  border-color: var(--border-bright);
+}
+
+#panel-body {
+  padding: 6px;
+  height: 330px;
+  overflow-y: auto;
+}
+
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+
+.slot {
+  position: relative;
+  aspect-ratio: 1;
+  background: var(--slot);
+  border: 1px solid #4a3925;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1.05;
+  text-align: center;
+  color: #d8cbb0;
+  padding: 1px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.slot.filled:hover {
+  border-color: var(--border-bright);
+  background: #2a2016;
+}
+
+.slot .count {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  color: #ffe066;
+  font-size: 9px;
+  text-shadow: 0 1px 2px #000;
+}
+
+.slot .swatch {
+  position: absolute;
+  inset: auto 3px 3px 3px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+#equipment-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.eq-slot {
+  aspect-ratio: 1;
+  background: var(--slot);
+  border: 1px solid #4a3925;
+  border-radius: 3px;
+  font-size: 9px;
+  color: #a8977a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.eq-slot.filled {
+  color: #efe4cf;
+  border-color: var(--border-bright);
+}
+
+.bonuses {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  font-size: 11px;
+  border-bottom: 1px solid #372a1c;
+}
+
+.skill-row .name {
+  flex: 1;
+  text-transform: capitalize;
+}
+
+.skill-row .lvl {
+  color: #ffe066;
+  font-weight: bold;
+}
+
+.skill-bar {
+  height: 3px;
+  background: #1a140e;
+  border-radius: 2px;
+  overflow: hidden;
+  width: 46px;
+}
+
+.skill-bar span {
+  display: block;
+  height: 100%;
+  background: var(--good);
+}
+
+.option-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  margin-bottom: 3px;
+  font-size: 11px;
+  background: #1e1711;
+  border: 1px solid #4a3925;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.option-row:hover {
+  border-color: var(--border-bright);
+}
+
+.option-row.active {
+  background: #4d3a22;
+  border-color: var(--border-bright);
+  color: #ffe9b8;
+}
+
+.option-row.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.option-row .meta {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* --- Social ------------------------------------------------------------ */
+.social-add {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.social-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 7px;
+  background: #17110c;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.social-add button {
+  padding: 6px 10px;
+  background: #4a3521;
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.friend-row .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b6257;
+  flex: 0 0 auto;
+}
+
+.friend-row.online .dot {
+  background: var(--good);
+  box-shadow: 0 0 6px rgba(123, 208, 106, 0.7);
+}
+
+.friend-row .who {
+  flex: 1;
+  text-align: left;
+}
+
+.empty-note {
+  padding: 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* --- Trade -------------------------------------------------------------- */
+.trade-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.trade-column h3 {
+  margin: 0 0 5px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.trade-offer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  min-height: 70px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.trade-status {
+  padding: 7px 9px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.trade-status b {
+  color: #ffe066;
+}
+
+.trade-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.trade-actions button {
+  flex: 1;
+  padding: 10px;
+  background: #4a3521;
+  border: 1px solid var(--border-bright);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.trade-actions button.primary {
+  background: linear-gradient(#5f7c2a, #44591d);
+}
+
+.trade-actions button.accepted {
+  background: linear-gradient(#3a4a2a, #2a3520);
+  color: var(--muted);
+}
+
+#chatlog .pm {
+  color: #d9a3ff;
+}
+
+/* --- Chat -------------------------------------------------------------- */
+#chat {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  width: min(430px, 45vw);
+}
+
+#chatlog {
+  height: 148px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  background: rgba(20, 15, 10, 0.82);
+  border: 2px solid var(--border);
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#chatlog div {
+  word-wrap: break-word;
+}
+
+#chatlog .chatline {
+  color: #ffe9b8;
+}
+
+#chatlog .system {
+  color: #cfe0ef;
+}
+
+#chatlog .levelup {
+  color: #ffd54a;
+  font-weight: bold;
+}
+
+#chatinput {
+  width: 100%;
+  padding: 7px 8px;
+  background: rgba(20, 15, 10, 0.92);
+  border: 2px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+#chatinput:focus {
+  outline: none;
+  border-color: var(--border-bright);
+}
+
+/* --- Context menu ------------------------------------------------------ */
+#contextmenu {
+  position: fixed;
+  z-index: 30;
+  min-width: 148px;
+  background: rgba(28, 21, 14, 0.97);
+  border: 2px solid var(--border-bright);
+  border-radius: 5px;
+  padding: 3px;
+  font-size: 13px;
+}
+
+#contextmenu .cm-title {
+  padding: 3px 8px;
+  color: #ffe066;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+#contextmenu .cm-item {
+  padding: 5px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+#contextmenu .cm-item:hover {
+  background: #57411f;
+}
+
+/* --- Modals ------------------------------------------------------------ */
+#modal {
+  background: rgba(6, 8, 12, 0.72);
+  z-index: 35;
+}
+
+#modal-card {
+  width: min(560px, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 16px;
+  background: linear-gradient(#33271d, #241b13);
+  border: 2px solid var(--border-bright);
+  border-radius: 8px;
+}
+
+#modal-card h2 {
+  margin: 0 0 12px;
+  font-family: var(--display);
+  font-size: 21px;
+  letter-spacing: 1px;
+  color: #f2c96b;
+}
+
+#modal-card .close {
+  float: right;
+  padding: 3px 10px;
+  background: #4a3521;
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.bank-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  margin-bottom: 12px;
+}
+
+.shop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid #372a1c;
+  font-size: 13px;
+}
+
+.shop-row button {
+  padding: 3px 10px;
+  background: #4a3521;
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.dialogue-line {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#tooltip {
+  position: fixed;
+  z-index: 45;
+  padding: 5px 9px;
+  background: rgba(20, 15, 10, 0.96);
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  max-width: 220px;
+}
+
+/* --- Phones ------------------------------------------------------------ */
+/* The panel becomes a bottom sheet: collapsed it is just the tab strip, so the
+   world keeps the screen; tapping a tab slides the page up over it. */
+#panel.collapsed #panel-body {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  #hud {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  #orbs {
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .orb {
+    width: 46px;
+    height: 46px;
+    font-size: 14px;
+  }
+
+  #minimap-wrap {
+    width: 112px;
+    height: 112px;
+  }
+
+  #region {
+    font-size: 10px;
+    bottom: 3px;
+  }
+
+  #panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    border-width: 2px 0 0;
+    border-radius: 0;
+  }
+
+  #tabs {
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    border-bottom: none;
+  }
+
+  #panel:not(.collapsed) #tabs {
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    padding: 9px 2px;
+    font-size: 12px;
+  }
+
+  #panel-body {
+    height: 42vh;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+
+  .grid {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+  }
+
+  .slot {
+    font-size: 10px;
+  }
+
+  #equipment-slots {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .option-row,
+  .skill-row {
+    padding: 9px 8px;
+    font-size: 13px;
+  }
+
+  #skills-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0 8px;
+  }
+
+  #chat {
+    left: 6px;
+    right: 6px;
+    width: auto;
+    bottom: 62px;
+  }
+
+  #panel:not(.collapsed) ~ #chat,
+  #chat.hidden {
+    display: none;
+  }
+
+  #chatlog {
+    height: 74px;
+    font-size: 12px;
+  }
+
+  #chatinput {
+    padding: 9px 8px;
+    font-size: 16px; /* 16px keeps iOS from zooming the page on focus */
+  }
+
+  #contextmenu {
+    min-width: 180px;
+    font-size: 15px;
+  }
+
+  #contextmenu .cm-item {
+    padding: 10px 10px;
+  }
+
+  #modal-card {
+    max-height: 70vh;
+  }
+
+  .bank-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (max-width: 760px) and (orientation: landscape) {
+  #panel-body {
+    height: 40vh;
+  }
+
+  #chatlog {
+    height: 52px;
+  }
+}

@@ -1,0 +1,41 @@
+# Deploy: `fly launch --no-deploy` once to claim a name, then `fly deploy`.
+# A volume is required for characters to survive a redeploy:
+#   fly volumes create characters --size 1
+app = "aetheria"
+primary_region = "lhr"
+
+[build]
+
+[env]
+  PORT = "8080"
+  AETHERIA_DATA = "/data/players"
+  # Fly terminates TLS in front of the app, so the forwarded address is real.
+  TRUST_PROXY = "1"
+  MAX_PLAYERS = "100"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  # A game server must not sleep: players are mid-fight, and the tick loop is
+  # the world. Keep one machine up.
+  auto_stop_machines = false
+  min_machines_running = 1
+
+  [http_service.http_options.response]
+    pristine = true
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  path = "/healthz"
+  timeout = "5s"
+
+[[mounts]]
+  source = "characters"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
